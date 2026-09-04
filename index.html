@@ -105,6 +105,112 @@ const INICIAL = {
   cierres:[], gastos:[], traspasos:[], consumos:[], liquidaciones:[]
 };
 
+
+/* ==========================================================================
+   PLANILLA ANTERIOR (3/6/2026 al 3/9/2026)
+   Datos históricos importados del Excel. No afectan saldos ni el tablero:
+   solo aparecen en el resumen cuando exportás un período que los incluya.
+   f=fecha, e=efectivo, p=posnet, c=consumo empleados,
+   po=pollo, co=congelados, ot=otros, su=sueldos, cs=cargas sociales
+   ========================================================================== */
+const HISTORICO = [
+{f:"2026-06-03",e:75400,p:0,c:110590,po:525000,co:0,ot:403647,su:0,cs:0},
+{f:"2026-06-04",e:285950,p:0,c:61570,po:0,co:0,ot:1000779,su:0,cs:0},
+{f:"2026-06-05",e:143000,p:0,c:0,po:0,co:1200982,ot:1355132,su:0,cs:0},
+{f:"2026-06-06",e:337900,p:157799,c:0,po:447000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-07",e:0,p:89664,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-08",e:37600,p:229845,c:38995,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-09",e:199000,p:222432,c:62926,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-10",e:171150,p:66224,c:80336,po:118000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-11",e:133500,p:280030,c:1499,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-12",e:305550,p:30177,c:60554,po:189000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-13",e:287300,p:185313,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-14",e:186100,p:0,c:37240,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-15",e:161434,p:98513,c:0,po:122000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-16",e:220400,p:234226,c:0,po:723000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-17",e:327550,p:169069,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-18",e:123000,p:397044,c:0,po:130000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-19",e:228550,p:157077,c:37199,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-20",e:41750,p:112483,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-21",e:20050,p:25706,c:28834,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-22",e:149650,p:202550,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-23",e:162750,p:389194,c:12600,po:1064000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-24",e:200200,p:205050,c:11259,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-25",e:304700,p:197089,c:8758,po:475000,co:563689,ot:0,su:0,cs:0},
+{f:"2026-06-26",e:161350,p:383981,c:61234,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-27",e:89850,p:309958,c:10689,po:524000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-28",e:68200,p:125236,c:59565,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-29",e:308150,p:240923,c:16334,po:402000,co:0,ot:0,su:0,cs:0},
+{f:"2026-06-30",e:213650,p:268584,c:87234,po:0,co:0,ot:1450000,su:2650000,cs:0},
+{f:"2026-07-01",e:152050,p:250110,c:13190,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-02",e:72500,p:359288,c:14961,po:192000,co:576910,ot:0,su:0,cs:0},
+{f:"2026-07-03",e:90950,p:134005,c:21087,po:260000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-04",e:227600,p:266637,c:34754,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-05",e:51900,p:180221,c:7360,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-06",e:271150,p:177666,c:11535,po:198000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-07",e:160200,p:310713,c:4865,po:128000,co:303900,ot:0,su:0,cs:0},
+{f:"2026-07-08",e:153150,p:287266,c:10797,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-09",e:100600,p:113366,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-10",e:240400,p:348897,c:0,po:256000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-11",e:288900,p:247331,c:13847,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-12",e:56850,p:7920,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-13",e:293700,p:321410,c:4154,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-14",e:309300,p:303641,c:6474,po:832000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-15",e:86600,p:141092,c:5285,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-16",e:166550,p:600282,c:0,po:512000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-17",e:308800,p:481547,c:9383,po:0,co:1176507,ot:0,su:0,cs:0},
+{f:"2026-07-18",e:342900,p:580616,c:38197,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-19",e:64250,p:103675,c:14937,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-20",e:210800,p:266738,c:1260,po:542000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-21",e:348300,p:296261,c:18440,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-22",e:128000,p:395494,c:14859,po:0,co:405900,ot:0,su:0,cs:0},
+{f:"2026-07-23",e:218700,p:477753,c:14242,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-24",e:180050,p:161774,c:9992,po:987000,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-25",e:87900,p:347881,c:2450,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-26",e:51700,p:135142,c:21317,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-27",e:189800,p:545056,c:3395,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-28",e:324250,p:239846,c:17037,po:743500,co:552865,ot:0,su:0,cs:0},
+{f:"2026-07-29",e:259700,p:304262,c:28906,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-30",e:273900,p:225759,c:9537,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-07-31",e:156400,p:409628,c:28616,po:360000,co:0,ot:0,su:2650000,cs:0},
+{f:"2026-08-01",e:184750,p:356344,c:13260,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-02",e:152950,p:59803,c:23310,po:0,co:0,ot:1450000,su:0,cs:0},
+{f:"2026-08-03",e:253150,p:274954,c:5250,po:354000,co:0,ot:0,su:0,cs:1434063},
+{f:"2026-08-04",e:237600,p:296662,c:91361,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-05",e:351900,p:380005,c:15502,po:0,co:500860,ot:0,su:0,cs:0},
+{f:"2026-08-06",e:141450,p:145428,c:5600,po:736500,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-07",e:262900,p:255629,c:3041,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-08",e:146600,p:362849,c:22294,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-09",e:93100,p:154368,c:4200,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-10",e:353850,p:487023,c:4371,po:568496,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-11",e:216850,p:244212,c:21634,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-12",e:314300,p:362516,c:2000,po:696496,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-13",e:316850,p:314749,c:57771,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-14",e:249300,p:286304,c:29665,po:450000,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-15",e:258500,p:366402,c:35735,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-16",e:35950,p:107962,c:9535,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-17",e:90100,p:132885,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-18",e:512500,p:400140,c:10772,po:519500,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-19",e:326950,p:405009,c:15817,po:0,co:602480,ot:0,su:0,cs:0},
+{f:"2026-08-20",e:161950,p:308994,c:5919,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-21",e:263000,p:196859,c:27300,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-22",e:461550,p:296851,c:23310,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-23",e:119150,p:197150,c:12040,po:500000,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-24",e:238300,p:317762,c:29721,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-25",e:140350,p:315519,c:7842,po:600000,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-26",e:288900,p:325900,c:15453,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-27",e:178650,p:230744,c:12898,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-28",e:228500,p:127910,c:7412,po:1000000,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-29",e:252500,p:184985,c:24711,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-30",e:74600,p:71625,c:0,po:0,co:0,ot:0,su:0,cs:0},
+{f:"2026-08-31",e:177300,p:371395,c:20471,po:0,co:0,ot:0,su:2650000,cs:0},
+{f:"2026-09-01",e:405450,p:498993,c:34188,po:500000,co:0,ot:0,su:0,cs:0},
+{f:"2026-09-02",e:329950,p:454186,c:14115,po:0,co:0,ot:4340380,su:0,cs:0},
+{f:"2026-09-03",e:273550,p:403087,c:30442,po:0,co:0,ot:0,su:0,cs:0}
+];
+const HIST_DESDE = HISTORICO.length ? HISTORICO[0].f : "";
+const HIST_HASTA = HISTORICO.length ? HISTORICO[HISTORICO.length-1].f : "";
+
 const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro del dueño","Otros"];
 const EQUILIBRIO = 395000;
 const NUBE = FIREBASE_CONFIG.apiKey.indexOf("PEGAR") !== 0;
@@ -569,6 +675,14 @@ function vAjustes(){
   }
   h+='</div>';
 
+  const mesesHist=[...new Set(HISTORICO.map(r=>ym(r.f)))].filter(m=>meses.indexOf(m)<0).sort().reverse();
+  mesesHist.forEach(m=>{
+    const dm=HISTORICO.filter(r=>ym(r.f)===m);
+    h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">'+
+      '<h3>'+esc(nombreMes(m))+'</h3><span class="fuerte" style="font-size:14px;font-variant-numeric:tabular-nums">'+
+      $$(dm.reduce((s,r)=>s+r.e+r.p+r.c,0))+'</span></div>'+
+      '<p class="tiny">'+dm.length+' días de la planilla anterior. Entran en el resumen pero no en los saldos.</p></div>';
+  });
   meses.forEach(m=>{
     const dm=ord.filter(c=>ym(c.fecha)===m);
     h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
@@ -600,7 +714,12 @@ function preset(t){
 function borrarCierre(f){ guardar({...datos,cierres:datos.cierres.filter(c=>c.fecha!==f)}); }
 function armarResumen(){
   const d1=panel.desde,d2=panel.hasta, en=f=>f>=d1&&f<=d2;
-  const cs=datos.cierres.filter(c=>en(c.fecha)).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const vivos=datos.cierres.filter(c=>en(c.fecha));
+  const fechasVivas=vivos.map(c=>c.fecha);
+  const hs=HISTORICO.filter(r=>en(r.f)&&fechasVivas.indexOf(r.f)<0)
+    .map(r=>({fecha:r.f,efectivo:r.e,posnet:r.p,consumo:r.c,retiro:null,quedo:null,banco:null,gastosChicos:0,difBanco:0,hist:true,
+              po:r.po,co:r.co,ot:r.ot,su:r.su,cs:r.cs}));
+  const cs=vivos.concat(hs).sort((a,b)=>a.fecha<b.fecha?-1:1);
   const gs=datos.gastos.filter(g=>en(g.fecha)).sort((a,b)=>a.fecha<b.fecha?-1:1);
   const ts=datos.traspasos.filter(t=>en(t.fecha));
   const ls=datos.liquidaciones.filter(l=>en(l.fecha));
@@ -613,7 +732,9 @@ function armarResumen(){
     pd[n]=pd[n]||{t:0,n:0}; pd[n].t+=c.efectivo+c.posnet; pd[n].n++; });
   const pc={}; gs.forEach(g=>pc[g.categoria]=(pc[g.categoria]||0)+g.monto);
 
-  const L=["GRANJA LOS ABUELOS — "+fec(d1)+" al "+fec(d2),"","VENTAS",
+  const L=["GRANJA LOS ABUELOS — "+fec(d1)+" al "+fec(d2),
+    (hs.length?"Incluye "+hs.length+" días de la planilla anterior (Excel) y "+vivos.length+" días cargados en la app.":"Días cargados en la app: "+vivos.length),
+    "","VENTAS",
     "Días cargados: "+cs.length,"Total: "+$$(ef+po)+" (efectivo "+$$(ef)+", posnet "+$$(po)+")"];
   if(cs.length) L.push("Promedio diario: "+$$((ef+po)/cs.length));
   L.push("");
@@ -623,13 +744,25 @@ function armarResumen(){
     L.push("");
   }
   L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; retiro; quedó; gastos chicos; saldo banco; sin acreditar)");
-  cs.forEach(c=>L.push([c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.banco,c.difBanco].join("; ")));
+  cs.forEach(c=>L.push(c.hist
+    ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","planilla anterior"].join("; ")
+    : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.banco,c.difBanco].join("; ")));
   L.push("","GASTOS CHICOS DE CAJA: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y BANCO");
   if(!gs.length) L.push("Ninguno.");
   Object.entries(pc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>L.push(k+": "+$$(v)));
   if(gs.length){
     L.push("Detalle (fecha; categoría; importe; origen):");
     gs.forEach(g=>L.push(g.fecha+"; "+g.categoria+(g.nota?" ("+g.nota+")":"")+"; "+g.monto+"; "+(g.origen==="efectivo"?"caja grande":"banco")));
+  }
+  if(hs.length){
+    const g={POLLO:0,CONGELADOS:0,OTROS:0,SUELDOS:0,"CARGAS SOCIALES":0};
+    hs.forEach(r=>{ g.POLLO+=r.po; g.CONGELADOS+=r.co; g.OTROS+=r.ot; g.SUELDOS+=r.su; g["CARGAS SOCIALES"]+=r.cs; });
+    const consumoHist=hs.reduce((a,r)=>a+r.consumo,0);
+    L.push("","GASTOS DE LA PLANILLA ANTERIOR ("+hs.length+" días)");
+    Object.entries(g).forEach(([k,v])=>{ if(v) L.push(k+": "+$$(v)); });
+    L.push("Consumo de empleados en esos días: "+$$(consumoHist));
+    L.push("Detalle (fecha; pollo; congelados; otros; sueldos; cargas sociales):");
+    hs.forEach(r=>{ if(r.po||r.co||r.ot||r.su||r.cs) L.push([r.fecha,r.po,r.co,r.ot,r.su,r.cs].join("; ")); });
   }
   L.push("","TRASPASOS");
   if(!ts.length) L.push("Ninguno.");
