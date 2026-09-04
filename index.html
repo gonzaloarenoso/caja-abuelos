@@ -587,6 +587,9 @@ function datosCierre(){
   return {f,e,po,r,q,b,chicos,dif:b-esperado};
 }
 function recalcCierre(){
+  try{ recalcCierre_(); }catch(e){}
+}
+function recalcCierre_(){
   const d=datosCierre();
   document.getElementById("resCierre").innerHTML =
     fila("Venta del día",$$(d.e+d.po),true)+fila("Gastos chicos del día",$$(d.chicos))+fila("Sin acreditar o comisiones",$$(d.dif));
@@ -643,6 +646,9 @@ function vTraspaso(){
    (t?'<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarMov(\'traspasos\',\''+t.id+'\');volver()">Borrar este traspaso</button></p>':"");
 }
 function recalcTraspaso(){
+  try{ recalcTraspaso_(); }catch(e){}
+}
+function recalcTraspaso_(){
   const con=document.getElementById("tk").checked;
   document.getElementById("tcom").style.display = con ? "block" : "none";
   const m=num(val("tm")), c=con?num(val("tc")):0, be=val("ts")==="be";
@@ -730,6 +736,9 @@ function vLiquidar(){
    '<button class="btn" onclick="guardarLiquidacion()">Liquidar sueldo</button>';
 }
 function recalcLiquidar(){
+  try{ recalcLiquidar_(); }catch(e){}
+}
+function recalcLiquidar_(){
   const e=panel.emp;
   const deuda=saldoEmp(e.id), bruto=num(val("ls")), ap=Math.min(deuda,bruto);
   document.getElementById("resLiq").innerHTML =
@@ -814,6 +823,9 @@ function agregarRenglon(){
   render();
 }
 function recalcPedido(){
+  try{ recalcPedido_(); }catch(e){}
+}
+function recalcPedido_(){
   const pr=datos.proveedores.find(x=>x.id===panel.prov);
   const esPollo = pr.nombre.toLowerCase().indexOf("pollo")>=0;
   let monto;
@@ -895,6 +907,72 @@ function leerCopia(input){
     notificar("Copia restaurada.");
   };
   r.readAsText(f);
+}
+
+/* ---------- registro de movimientos ---------- */
+function vMovs(){
+  const meses=[...new Set([].concat(
+    datos.cierres.map(c=>ym(c.fecha)), datos.gastos.map(g=>ym(g.fecha)),
+    datos.traspasos.map(t=>ym(t.fecha)), datos.consumos.map(c=>ym(c.fecha)),
+    datos.pedidos.map(x=>ym(x.fecha)), datos.liquidaciones.map(l=>ym(l.fecha))))].sort().reverse();
+  if(!meses.length) meses.push(ym(hoy()));
+  const m = panel.mes && meses.indexOf(panel.mes)>=0 ? panel.mes : meses[0];
+  panel.mes = m;
+  const nom = id => { const e=datos.empleados.find(x=>x.id===id); return e?e.nombre:"empleado"; };
+  const nomP = id => { const pr=datos.proveedores.find(x=>x.id===id); return pr?pr.nombre:"proveedor"; };
+  const items=[];
+
+  datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
+    t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+" · quedó "+$$(c.quedo),
+    monto:c.efectivo+c.posnet, signo:"+",
+    acc:'<button class="link" onclick="panel={tipo:\'cierre\',fecha:\''+c.fecha+'\'};render()">Editar</button>'}));
+
+  datos.gastos.filter(x=>ym(x.fecha)===m).forEach(g=>items.push({fecha:g.fecha,
+    t:g.categoria+(g.nota?" · "+g.nota:""), sub:g.origen==="efectivo"?"efectivo":"cuenta bancaria",
+    monto:g.monto, signo:"−",
+    acc:'<button class="link" onclick="panel={tipo:\'gasto\',edit:\''+g.id+'\'};render()">Editar</button>'}));
+
+  datos.pedidos.filter(x=>ym(x.fecha)===m).forEach(x=>items.push({fecha:x.fecha,
+    t:"Pedido a "+nomP(x.provId),
+    sub:(x.cajones?x.cajones+" cajones":"")+(x.detalle?x.detalle.length+" productos":"")||"sin detalle",
+    monto:x.monto, signo:"deuda",
+    acc:'<button class="link" onclick="panel={tipo:\'pedido\',edit:\''+x.id+'\'};render()">Editar</button>'}));
+
+  datos.traspasos.filter(x=>ym(x.fecha)===m).forEach(t=>items.push({fecha:t.fecha,
+    t:t.sentido==="be"?"Traspaso banco a efectivo":"Traspaso efectivo a banco",
+    sub:t.comision?"comisión "+$$(t.comision):"sin comisión", monto:t.monto, signo:"=",
+    acc:'<button class="link" onclick="panel={tipo:\'traspaso\',edit:\''+t.id+'\'};render()">Editar</button>'}));
+
+  datos.consumos.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
+    t:(c.tipo==="adelanto"?"Adelanto a ":"Mercadería a ")+nom(c.empleadoId),
+    sub:(c.tipo==="adelanto"?(c.origen==="efectivo"?"efectivo":"cuenta bancaria"):(c.nota||"consumo"))+(c.liquidado?" · ya descontado":" · pendiente"),
+    monto:c.monto, signo:c.tipo==="adelanto"?"−":"",
+    acc:c.liquidado?"":'<button class="del" onclick="borrarMov(\'consumos\',\''+c.id+'\')">Borrar</button>'}));
+
+  datos.liquidaciones.filter(x=>ym(x.fecha)===m).forEach(l=>items.push({fecha:l.fecha,
+    t:"Sueldo de "+l.nombre, sub:"bruto "+$$(l.bruto)+" · descontado "+$$(l.descontado)+" · "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria"),
+    monto:l.neto, signo:"−",
+    acc:'<button class="del" onclick="anularLiq(\''+l.id+'\')">Anular</button>'}));
+
+  items.sort((a,b)=> a.fecha===b.fecha ? 0 : (a.fecha<b.fecha?1:-1));
+
+  let h='<div class="card"><label><span>Mes</span><select onchange="panel.mes=this.value;render()">'+
+    meses.map(x=>'<option value="'+x+'"'+(x===m?' selected':'')+'>'+esc(nombreMes(x))+'</option>').join("")+
+    '</select></label><p class="tiny" style="margin-top:8px">'+items.length+(items.length===1?' movimiento':' movimientos')+'</p></div>';
+
+  if(!items.length) return h+'<div class="card"><p class="muted">No hay movimientos en este mes.</p></div>';
+
+  h+='<div class="card">'+items.map(i=>
+    '<div class="item"><div class="txt"><p>'+esc(i.t)+'</p><p class="tiny">'+fec(i.fecha)+' · '+esc(i.sub)+'</p></div>'+
+    '<div class="der"><span>'+i.signo+' '+$$(i.monto)+'</span>'+i.acc+'</div></div>').join("")+'</div>';
+  return h;
+}
+function anularLiq(id){
+  const l=datos.liquidaciones.find(x=>x.id===id);
+  if(!l) return;
+  const consumos=datos.consumos.map(c=> c.liqId===id ? {...c,liquidado:false,liqId:null} : c);
+  guardar({...datos,consumos,liquidaciones:datos.liquidaciones.filter(x=>x.id!==id)});
+  notificar("Liquidación anulada. Los consumos vuelven a quedar pendientes.");
 }
 
 /* ---------- venta semanal por producto ---------- */
