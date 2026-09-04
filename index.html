@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Caja Abuelos">
+<meta name="theme-color" content="#f5f5f4">
+<title>Caja — Granja Los Abuelos</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f4;color:#1c1917;-webkit-text-size-adjust:100%}
+#app{max-width:640px;margin:0 auto;padding:16px 16px 60px}
+h1{font-size:22px;font-weight:600;letter-spacing:-.01em}
+h2{font-size:18px;font-weight:500}
+h3{font-size:14px;font-weight:500;color:#57534e}
+.card{background:#fff;border:1px solid #e7e5e4;border-radius:10px;padding:16px;margin-bottom:16px}
+.muted{color:#78716c;font-size:13px}
+.tiny{color:#78716c;font-size:12px}
+label{display:block}
+label>span{display:block;font-size:12px;color:#78716c;margin-bottom:4px}
+input,select,textarea{width:100%;padding:9px 11px;background:#fff;border:1px solid #d6d3d1;border-radius:6px;font-size:16px;color:#1c1917;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#78716c}
+input[type=checkbox]{width:16px;height:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.mb{margin-bottom:12px}
+button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;cursor:pointer;transition:background .15s}
+.btn{width:100%;padding:11px;background:#292524;color:#fff;border:none}
+.btn:hover{background:#44403c}
+.btn2{width:100%;padding:11px;background:#fff;color:#44403c;border:1px solid #d6d3d1}
+.btn2:hover{background:#fafaf9}
+.link{background:none;border:none;color:#78716c;font-size:12px;text-decoration:underline;padding:0;font-weight:400}
+.del{background:none;border:none;color:#b91c1c;font-size:12px;text-decoration:underline;padding:0;font-weight:400}
+.resumen{background:#fafaf9;border-radius:6px;padding:12px;font-size:14px}
+.fila{display:flex;justify-content:space-between;gap:12px;padding:2px 0}
+.fila span:last-child{font-variant-numeric:tabular-nums;flex-shrink:0}
+.fuerte{font-weight:500}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+.total b{font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.mini{background:#fafaf9;border-radius:6px;padding:8px;text-align:center}
+.mini p:first-child{font-size:11px;color:#78716c}
+.mini p:last-child{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+.acciones{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.acc{padding:14px 4px;background:#fff;border:1px solid #e7e5e4;border-radius:10px;color:#44403c;font-size:12px;font-weight:400}
+.acc:hover{background:#fafaf9}
+.big{width:100%;padding:14px;background:#292524;color:#fff;border:none;margin-bottom:12px;font-size:16px}
+.big.hecho{background:#fff;color:#44403c;border:1px solid #d6d3d1}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #f5f5f4}
+.item:first-child{border-top:none}
+.item .txt{min-width:0}
+.item .txt p:first-child{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .der{display:flex;align-items:center;gap:12px;flex-shrink:0;font-size:14px;font-variant-numeric:tabular-nums}
+.emp{width:100%;text-align:left;background:none;border:none;padding:9px 4px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #f5f5f4;font-weight:400}
+.emp:first-child{border-top:none}
+.emp:hover{background:#fafaf9}
+.emp .s{text-align:right}
+.emp .s p:first-child{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{flex:1;padding:9px;background:#fff;border:1px solid #d6d3d1;color:#57534e;font-weight:400}
+.tab.on{background:#292524;color:#fff;border-color:#292524}
+.volver{background:none;border:none;color:#57534e;font-size:14px;padding:0;margin-bottom:12px;font-weight:400}
+.aviso{background:#292524;color:#fff;font-size:14px;padding:9px 12px;border-radius:6px;margin-bottom:16px}
+.error{color:#b91c1c;font-size:13px;margin-top:8px}
+.ok{color:#15803d;font-size:13px}
+.centro{max-width:320px;margin:80px auto;text-align:center}
+textarea{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#fafaf9;line-height:1.5}
+.badge{font-size:11px;color:#78716c;border:1px solid #e7e5e4;border-radius:20px;padding:2px 8px}
+@media(max-width:400px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="app"><p class="muted" style="padding:40px;text-align:center">Cargando…</p></div>
+
+<script>
+/* ==========================================================================
+   CONFIGURACIÓN DE FIREBASE
+   Pegá acá el bloque de configuración que ya usás en el CRM.
+   Está dentro del index.html del CRM, buscá "apiKey".
+   Mientras diga PEGAR_ACA, la app guarda solo en este dispositivo.
+   ========================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "PEGAR_ACA",
+  authDomain: "PEGAR_ACA",
+  projectId: "PEGAR_ACA",
+  storageBucket: "PEGAR_ACA",
+  messagingSenderId: "PEGAR_ACA",
+  appId: "PEGAR_ACA"
+};
+
+/* Saldos con los que arranca la app la primera vez */
+const INICIAL = {
+  inicio: { fecha:"2026-09-03", cajaChica:71100, cajaGrande:1589000, banco:1225372.47 },
+  empleados: [
+    { id:"e1", nombre:"Ramona Zalazar", sueldo:950000, viaticos:50000, activo:true },
+    { id:"e2", nombre:"Monserrat Maldonado", sueldo:850000, viaticos:50000, activo:true },
+    { id:"e3", nombre:"Braian Perez", sueldo:750000, viaticos:0, activo:true }
+  ],
+  cierres:[], gastos:[], traspasos:[], consumos:[], liquidaciones:[]
+};
+
+const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro del dueño","Otros"];
+const EQUILIBRIO = 395000;
+const NUBE = FIREBASE_CONFIG.apiKey !== "PEGAR_ACA";
+const LKEY = "granja_caja_v1";
+
+let datos = null, panel = null, uid = null, db = null, aviso = "", timerAviso = null;
+
+/* ---------- utilidades ---------- */
+const hoy = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const num = s => { if(typeof s==="number") return s; if(!s) return 0; const n=parseFloat(String(s).replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; };
+const fmt = n => (n||0).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:2});
+const $$ = n => "$ "+fmt(n);
+const fec = i => i ? i.slice(8,10)+"/"+i.slice(5,7) : "";
+const ym = i => (i||"").slice(0,7);
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+const nombreMes = m => m ? MESES[parseInt(m.slice(5,7),10)-1]+" "+m.slice(0,4) : "";
+const uid8 = () => Math.random().toString(36).slice(2,10);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const val = id => { const e=document.getElementById(id); return e?e.value:""; };
+const etiqueta = c => fec(c.fecha)+" · "+(c.tipo==="adelanto"?"adelanto":(c.nota||"mercadería"));
+
+function notificar(t){ aviso=t; clearTimeout(timerAviso); render(); timerAviso=setTimeout(()=>{aviso="";render();},2600); }
+
+/* ---------- saldos ---------- */
+function calcular(d){
+  const cs=[...d.cierres].sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const u=cs[cs.length-1], corte=u?u.fecha:d.inicio.fecha;
+  let cajaChica=u?u.quedo:d.inicio.cajaChica, banco=u?u.banco:d.inicio.banco, cajaGrande=d.inicio.cajaGrande;
+  cs.forEach(c=>cajaGrande+=c.retiro||0);
+  d.gastos.forEach(g=>{ if(g.origen==="efectivo") cajaGrande-=g.monto; else if(g.fecha>corte) banco-=g.monto; });
+  d.liquidaciones.forEach(l=>{ if(l.origen==="efectivo") cajaGrande-=l.neto; else if(l.fecha>corte) banco-=l.neto; });
+  d.consumos.forEach(c=>{ if(c.tipo!=="adelanto") return; if(c.origen==="efectivo") cajaGrande-=c.monto; else if(c.fecha>corte) banco-=c.monto; });
+  d.traspasos.forEach(t=>{ const n=t.monto-(t.comision||0);
+    if(t.sentido==="be"){ cajaGrande+=n; if(t.fecha>corte) banco-=t.monto; }
+    else { cajaGrande-=t.monto; if(t.fecha>corte) banco+=n; } });
+  return { cajaChica, cajaGrande, banco, total:cajaChica+cajaGrande+banco };
+}
+function previos(f){
+  const a=datos.cierres.filter(c=>c.fecha<f).sort((x,y)=>x.fecha<y.fecha?-1:1);
+  const u=a[a.length-1];
+  return u ? {cajaChica:u.quedo,banco:u.banco,corte:u.fecha}
+           : {cajaChica:datos.inicio.cajaChica,banco:datos.inicio.banco,corte:datos.inicio.fecha};
+}
+const saldoEmp = id => datos.consumos.filter(c=>c.empleadoId===id&&!c.liquidado).reduce((s,c)=>s+c.monto,0);
+
+/* ---------- guardado ---------- */
+async function guardar(nuevo){
+  datos = nuevo;
+  render();
+  try {
+    if(NUBE && db && uid) await db.collection("caja").doc(uid).set(datos);
+    else localStorage.setItem(LKEY, JSON.stringify(datos));
+  } catch(e){ notificar("No se pudo guardar: "+e.message); }
+}
+function volver(){ panel=null; render(); }
+function listo(msg){ panel=null; notificar(msg); }
+
+/* ---------- arranque ---------- */
+async function iniciar(){
+  if(!NUBE){
+    const g = localStorage.getItem(LKEY);
+    datos = g ? JSON.parse(g) : JSON.parse(JSON.stringify(INICIAL));
+    render();
+    return;
+  }
+  await cargarSDK();
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  firebase.auth().onAuthStateChanged(async u=>{
+    if(!u){ uid=null; datos=null; render(); return; }
+    uid = u.uid;
+    db.collection("caja").doc(uid).onSnapshot(doc=>{
+      datos = doc.exists ? doc.data() : JSON.parse(JSON.stringify(INICIAL));
+      if(!doc.exists) db.collection("caja").doc(uid).set(datos);
+      render();
+    }, err=>{ notificar("Error de conexión: "+err.message); });
+  });
+}
+function cargarSDK(){
+  const urls=["https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js",
+              "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
+              "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"];
+  return urls.reduce((p,u)=>p.then(()=>new Promise((res,rej)=>{
+    const s=document.createElement("script"); s.src=u; s.onload=res; s.onerror=()=>rej(new Error("No se pudo cargar Firebase")); document.head.appendChild(s);
+  })), Promise.resolve());
+}
+
+/* ---------- login ---------- */
+async function entrar(){
+  const e=val("mail"), p=val("pass");
+  if(!e||!p) return notificar("Completá mail y contraseña.");
+  try { await firebase.auth().signInWithEmailAndPassword(e,p); }
+  catch(err){ notificar(traducir(err.code)); }
+}
+async function crearCuenta(){
+  const e=val("mail"), p=val("pass");
+  if(!e||p.length<6) return notificar("La contraseña necesita al menos 6 caracteres.");
+  try { await firebase.auth().createUserWithEmailAndPassword(e,p); }
+  catch(err){ notificar(traducir(err.code)); }
+}
+function salir(){ firebase.auth().signOut(); }
+function traducir(c){
+  const m={"auth/invalid-credential":"Mail o contraseña incorrectos.","auth/wrong-password":"Contraseña incorrecta.",
+  "auth/user-not-found":"No existe esa cuenta.","auth/email-already-in-use":"Ese mail ya tiene cuenta.",
+  "auth/invalid-email":"El mail no es válido.","auth/weak-password":"La contraseña es muy corta.",
+  "auth/network-request-failed":"Sin conexión."};
+  return m[c]||("Error: "+c);
+}
+
+/* ==================== RENDER ==================== */
+function render(){
+  const app=document.getElementById("app");
+  if(NUBE && !uid){ app.innerHTML=vLogin(); return; }
+  if(!datos){ app.innerHTML='<p class="muted" style="padding:40px;text-align:center">Cargando…</p>'; return; }
+  const av = aviso ? '<div class="aviso">'+esc(aviso)+'</div>' : "";
+  if(!panel){ app.innerHTML=vCabecera()+av+vInicio(); return; }
+  const titulos={cierre:"Cierre del día",gasto:"Nuevo gasto",traspaso:"Traspaso",empMov:"Cargar a un empleado",
+    empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
+  const cuerpo={cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,ajustes:vAjustes}[panel.tipo]();
+  app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
+  if(panel.tipo==="cierre") recalcCierre();
+  if(panel.tipo==="traspaso") recalcTraspaso();
+  if(panel.tipo==="liquidar") recalcLiquidar();
+}
+
+function vLogin(){
+  return '<div class="centro"><div class="card">'+
+    '<h2 style="margin-bottom:4px">Granja Los Abuelos</h2><p class="muted" style="margin-bottom:16px">Caja diaria</p>'+
+    (aviso?'<div class="aviso">'+esc(aviso)+'</div>':'')+
+    '<div class="mb"><label><span>Mail</span><input id="mail" type="email" autocomplete="username"></label></div>'+
+    '<div class="mb"><label><span>Contraseña</span><input id="pass" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')entrar()"></label></div>'+
+    '<button class="btn" onclick="entrar()">Entrar</button>'+
+    '<p style="margin-top:12px"><button class="link" onclick="crearCuenta()">Crear cuenta la primera vez</button></p>'+
+    '</div></div>';
+}
+
+function vCabecera(){
+  const f=new Date().toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long"});
+  return '<div style="margin-bottom:16px"><h1>Granja Los Abuelos</h1><p class="muted">'+esc(f)+'</p></div>';
+}
+
+function vInicio(){
+  const s=calcular(datos), m=ym(hoy());
+  const dm=datos.cierres.filter(c=>ym(c.fecha)===m);
+  const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
+  const prom=dm.length?ventas/dm.length:0;
+  const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const grandes=datos.gastos.filter(g=>ym(g.fecha)===m).reduce((a,g)=>a+g.monto,0);
+  const cargado=datos.cierres.some(c=>c.fecha===hoy());
+  const act=datos.empleados.filter(e=>e.activo);
+
+  const recientes=[
+    ...datos.gastos.map(g=>({...g,k:"gastos",t:g.categoria+(g.nota?" · "+g.nota:""),s:g.origen==="efectivo"?"caja grande":"banco"})),
+    ...datos.traspasos.map(t=>({...t,k:"traspasos",t:t.sentido==="be"?"Banco a efectivo":"Efectivo a banco",s:t.comision?"comisión "+$$(t.comision):"sin comisión"})),
+    ...datos.consumos.filter(c=>c.tipo==="adelanto").map(c=>({...c,k:"consumos",t:"Adelanto",s:(datos.empleados.find(e=>e.id===c.empleadoId)||{}).nombre||""}))
+  ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,6);
+
+  let h='<div class="card"><div class="total"><span class="muted">Disponible</span><b>'+$$(s.total)+'</b></div><div class="row3">'+
+    '<div class="mini"><p>Caja chica</p><p>'+$$(s.cajaChica)+'</p></div>'+
+    '<div class="mini"><p>Caja grande</p><p>'+$$(s.cajaGrande)+'</p></div>'+
+    '<div class="mini"><p>Banco</p><p>'+$$(s.banco)+'</p></div></div></div>';
+
+  h+='<button class="big'+(cargado?" hecho":"")+'" onclick="abrir(\'cierre\')">'+(cargado?"&#10003; Día cargado · editar":"Cerrar el día")+'</button>';
+  h+='<div class="acciones"><button class="acc" onclick="abrir(\'gasto\')">Gasto</button>'+
+     '<button class="acc" onclick="abrir(\'traspaso\')">Traspaso</button>'+
+     '<button class="acc" onclick="abrir(\'empMov\')">Empleado</button></div>';
+
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'+
+     '<h3>'+esc(nombreMes(m))+'</h3><button class="link" onclick="abrir(\'ajustes\')">Historial y ajustes</button></div><div class="resumen">'+
+     fila("Ventas · "+dm.length+(dm.length===1?" día":" días"),$$(ventas),true)+
+     fila("Promedio diario",$$(prom))+
+     fila("Gastos chicos de caja",$$(chicos))+
+     fila("Gastos de caja grande y banco",$$(grandes))+'</div>';
+  if(dm.length) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
+     (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
+                       : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
+  h+='</div>';
+
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
+     '<h3>Empleados</h3><button class="link" onclick="abrir(\'nuevoEmp\')">Agregar</button></div>';
+  h+= act.length ? act.map(e=>'<button class="emp" onclick="verEmpleado(\''+e.id+'\')"><span style="font-size:14px">'+esc(e.nombre)+
+     '</span><span class="s"><p>'+$$(saldoEmp(e.id))+'</p><p class="tiny">a descontar</p></span></button>').join("")
+     : '<p class="muted">No hay empleados cargados.</p>';
+  h+='</div>';
+
+  if(recientes.length){
+    h+='<div class="card"><h3 style="margin-bottom:8px">Últimos movimientos</h3>'+
+      recientes.map(r=>'<div class="item"><div class="txt"><p>'+esc(r.t)+'</p><p class="tiny">'+fec(r.fecha)+' · '+esc(r.s)+
+      '</p></div><div class="der"><span>'+$$(r.monto)+'</span><button class="del" onclick="borrarMov(\''+r.k+'\',\''+r.id+'\')">Borrar</button></div></div>').join("")+'</div>';
+  }
+  if(!NUBE) h+='<p class="tiny" style="text-align:center">Guardando solo en este dispositivo. Pegá la configuración de Firebase para sincronizar.</p>';
+  else h+='<p style="text-align:center"><button class="link" onclick="salir()">Cerrar sesión</button></p>';
+  return h;
+}
+
+const fila=(l,v,f)=>'<div class="fila'+(f?" fuerte":"")+'"><span>'+esc(l)+'</span><span>'+v+'</span></div>';
+function abrir(t){ panel={tipo:t}; render(); }
+function verEmpleado(id){ panel={tipo:"empleado",emp:datos.empleados.find(e=>e.id===id)}; render(); }
+function borrarMov(k,id){ const n={...datos}; n[k]=datos[k].filter(x=>x.id!==id); guardar(n); }
+
+/* ---------- cierre ---------- */
+function vCierre(){
+  const f = panel.fecha || hoy();
+  panel.fecha = f;
+  const e = datos.cierres.find(c=>c.fecha===f);
+  const p = previos(f);
+  const v = k => e ? e[k] : "";
+  return '<div class="card">'+
+   '<div class="mb"><label><span>Fecha</span><input type="date" id="cf" value="'+f+'" onchange="panel.fecha=this.value;render()"></label></div>'+
+   (e?'<p class="muted mb">Este día ya estaba cargado. Si guardás, lo reemplazás.</p>':'')+
+   '<p class="muted mb">El cajón venía de '+$$(p.cajaChica)+' y el banco de '+$$(p.banco)+', al '+fec(p.corte)+'.</p>'+
+   '<div class="row"><label><span>Cobrado en efectivo</span><input id="ce" inputmode="decimal" value="'+v("efectivo")+'" oninput="recalcCierre()"></label>'+
+   '<label><span>Cobrado por Posnet</span><input id="cp" inputmode="decimal" value="'+v("posnet")+'" oninput="recalcCierre()"></label></div>'+
+   '<div class="row"><label><span>Retiré del cajón</span><input id="cr" inputmode="decimal" value="'+v("retiro")+'" oninput="recalcCierre()"></label>'+
+   '<label><span>Quedó en caja</span><input id="cq" inputmode="decimal" value="'+v("quedo")+'" oninput="recalcCierre()"></label></div>'+
+   '<div class="mb"><label><span>Saldo real del banco</span><input id="cb" inputmode="decimal" value="'+v("banco")+'" oninput="recalcCierre()"></label></div>'+
+   '<div class="resumen" id="resCierre"></div><p id="errCierre"></p></div>'+
+   '<button class="btn" onclick="guardarCierre()">'+(e?"Actualizar día":"Guardar día")+'</button>';
+}
+function movBanco(f){
+  let m=0;
+  datos.gastos.forEach(g=>{ if(g.origen==="banco"&&g.fecha===f) m-=g.monto; });
+  datos.liquidaciones.forEach(l=>{ if(l.origen==="banco"&&l.fecha===f) m-=l.neto; });
+  datos.consumos.forEach(c=>{ if(c.tipo==="adelanto"&&c.origen==="banco"&&c.fecha===f) m-=c.monto; });
+  datos.traspasos.forEach(t=>{ if(t.fecha!==f) return; m += t.sentido==="be" ? -t.monto : t.monto-(t.comision||0); });
+  return m;
+}
+function datosCierre(){
+  const f=panel.fecha, p=previos(f);
+  const e=num(val("ce")), po=num(val("cp")), r=num(val("cr")), q=num(val("cq")), b=num(val("cb"));
+  const chicos=p.cajaChica+e-r-q, esperado=p.banco+po+movBanco(f);
+  return {f,e,po,r,q,b,chicos,dif:b-esperado};
+}
+function recalcCierre(){
+  const d=datosCierre();
+  document.getElementById("resCierre").innerHTML =
+    fila("Venta del día",$$(d.e+d.po),true)+fila("Gastos chicos del día",$$(d.chicos))+fila("Sin acreditar o comisiones",$$(d.dif));
+  document.getElementById("errCierre").innerHTML =
+    d.chicos<0 ? '<span class="error">Los gastos chicos dan negativo. Revisá el conteo o el retiro.</span>' : "";
+}
+function guardarCierre(){
+  if(val("ce")===""||val("cq")===""||val("cb")==="") return notificar("Faltan el efectivo cobrado, lo que quedó en caja y el saldo del banco.");
+  const d=datosCierre();
+  const reg={fecha:d.f,efectivo:d.e,posnet:d.po,retiro:d.r,quedo:d.q,banco:d.b,gastosChicos:d.chicos,difBanco:d.dif};
+  const existia=datos.cierres.some(c=>c.fecha===d.f);
+  guardar({...datos,cierres:[...datos.cierres.filter(c=>c.fecha!==d.f),reg]});
+  listo(existia?"Día actualizado.":"Día guardado.");
+}
+
+/* ---------- gasto ---------- */
+function vGasto(){
+  return '<div class="card">'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="gf" value="'+hoy()+'"></label>'+
+   '<label><span>Categoría</span><select id="gc">'+CATEGORIAS.map(c=>'<option>'+c+'</option>').join("")+'</select></label></div>'+
+   '<div class="row"><label><span>Importe</span><input id="gm" inputmode="decimal" placeholder="0"></label>'+
+   '<label><span>Salió de</span><select id="go"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label></div>'+
+   '<div class="mb"><label><span>Detalle (opcional)</span><input id="gn"></label></div></div>'+
+   '<button class="btn" onclick="guardarGasto()">Registrar gasto</button>';
+}
+function guardarGasto(){
+  const m=num(val("gm"));
+  if(m<=0) return notificar("Poné el importe.");
+  guardar({...datos,gastos:[...datos.gastos,{id:uid8(),fecha:val("gf"),categoria:val("gc"),monto:m,origen:val("go"),nota:val("gn")}]});
+  listo("Gasto registrado.");
+}
+
+/* ---------- traspaso ---------- */
+function vTraspaso(){
+  return '<div class="card">'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="tf" value="'+hoy()+'"></label>'+
+   '<label><span>Sentido</span><select id="ts" onchange="recalcTraspaso()"><option value="be">Del banco al efectivo</option><option value="eb">Del efectivo al banco</option></select></label></div>'+
+   '<div class="mb"><label><span>Importe</span><input id="tm" inputmode="decimal" placeholder="0" oninput="recalcTraspaso()"></label></div>'+
+   '<label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px">'+
+   '<input type="checkbox" id="tk" onchange="recalcTraspaso()" style="width:16px"> Hubo comisión</label>'+
+   '<div id="tcom" style="display:none" class="mb"><label><span>Comisión</span><input id="tc" inputmode="decimal" placeholder="0" oninput="recalcTraspaso()"></label></div>'+
+   '<div class="resumen" id="resTras"></div></div>'+
+   '<button class="btn" onclick="guardarTraspaso()">Registrar traspaso</button>';
+}
+function recalcTraspaso(){
+  const con=document.getElementById("tk").checked;
+  document.getElementById("tcom").style.display = con ? "block" : "none";
+  const m=num(val("tm")), c=con?num(val("tc")):0, be=val("ts")==="be";
+  document.getElementById("resTras").innerHTML =
+    fila(be?"Sale del banco":"Sale de caja grande",$$(m))+fila(be?"Entra en caja grande":"Entra en el banco",$$(m-c),true);
+}
+function guardarTraspaso(){
+  const m=num(val("tm")), con=document.getElementById("tk").checked, c=con?num(val("tc")):0;
+  if(m<=0) return notificar("Poné el importe.");
+  if(c>=m) return notificar("La comisión no puede ser mayor al importe.");
+  guardar({...datos,traspasos:[...datos.traspasos,{id:uid8(),fecha:val("tf"),sentido:val("ts"),monto:m,comision:c}]});
+  listo("Traspaso registrado.");
+}
+
+/* ---------- consumo / adelanto ---------- */
+function vEmpMov(){
+  const t = panel.t || "consumo";
+  panel.t = t;
+  const act = datos.empleados.filter(e=>e.activo);
+  return '<div class="card"><div class="tabs">'+
+   '<button class="tab'+(t==="consumo"?" on":"")+'" onclick="panel.t=\'consumo\';render()">Mercadería</button>'+
+   '<button class="tab'+(t==="adelanto"?" on":"")+'" onclick="panel.t=\'adelanto\';render()">Adelanto en plata</button></div>'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="mf" value="'+hoy()+'"></label>'+
+   '<label><span>Empleado</span><select id="me">'+act.map(e=>'<option value="'+e.id+'">'+esc(e.nombre)+'</option>').join("")+'</select></label></div>'+
+   '<div class="row"><label><span>Importe</span><input id="mm" inputmode="decimal" placeholder="0"></label>'+
+   (t==="adelanto"
+     ? '<label><span>Salió de</span><select id="mo"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label>'
+     : '<label><span>Qué se llevó (opcional)</span><input id="mn"></label>')+'</div>'+
+   '<p class="tiny">'+(t==="adelanto"?"Sale de la caja que elijas y se descuenta del próximo sueldo.":"No toca la caja: solo queda como saldo a descontar.")+'</p></div>'+
+   '<button class="btn" onclick="guardarMov()">'+(t==="adelanto"?"Registrar adelanto":"Cargar consumo")+'</button>';
+}
+function guardarMov(){
+  const m=num(val("mm")), t=panel.t;
+  if(!val("me")) return notificar("Elegí el empleado.");
+  if(m<=0) return notificar("Poné el importe.");
+  guardar({...datos,consumos:[...datos.consumos,{id:uid8(),empleadoId:val("me"),fecha:val("mf"),monto:m,
+    nota:t==="adelanto"?"":val("mn"),tipo:t,origen:t==="adelanto"?val("mo"):null,liquidado:false}]});
+  listo(t==="adelanto"?"Adelanto registrado.":"Consumo cargado.");
+}
+
+/* ---------- ficha del empleado ---------- */
+function vEmpleado(){
+  const e=panel.emp;
+  const movs=datos.consumos.filter(c=>c.empleadoId===e.id).sort((a,b)=>a.fecha<b.fecha?1:-1);
+  const pend=movs.filter(c=>!c.liquidado).reduce((s,c)=>s+c.monto,0);
+  const liqs=datos.liquidaciones.filter(l=>l.empleadoId===e.id).sort((a,b)=>a.fecha<b.fecha?1:-1);
+  let h='<div class="card"><p style="font-size:17px;font-weight:500">'+esc(e.nombre)+'</p>'+
+    '<p class="muted" style="margin-bottom:12px">Sueldo '+$$(e.sueldo)+(e.viaticos?" + "+$$(e.viaticos)+" de viáticos":"")+'</p>'+
+    '<div class="resumen">'+fila("Sueldo total",$$(e.sueldo+e.viaticos))+fila("Pendiente a descontar",$$(pend),true)+'</div></div>';
+  h+='<div class="card"><h3 style="margin-bottom:8px">Consumos y adelantos</h3>';
+  h+= movs.length ? movs.map(c=>'<div class="item"><div class="txt"><p>'+esc(etiqueta(c))+'</p><p class="tiny">'+
+      (c.liquidado?"ya descontado":"pendiente")+'</p></div><div class="der"><span style="'+(c.liquidado?"color:#a8a29e":"")+'">'+$$(c.monto)+'</span>'+
+      (c.liquidado?"":'<button class="del" onclick="borrarConsumo(\''+c.id+'\')">Borrar</button>')+'</div></div>').join("")
+      : '<p class="muted">Todavía no tiene movimientos.</p>';
+  h+='</div>';
+  if(liqs.length){
+    h+='<div class="card"><h3 style="margin-bottom:8px">Sueldos liquidados</h3>'+
+      liqs.map(l=>'<div class="item"><div class="txt"><p>'+fec(l.fecha)+'</p><p class="tiny">bruto '+$$(l.bruto)+
+      ' · descontado '+$$(l.descontado)+'</p></div><div class="der"><span>'+$$(l.neto)+'</span></div></div>').join("")+'</div>';
+  }
+  h+='<button class="btn" onclick="panel={tipo:\'liquidar\',emp:panel.emp};render()">Liquidar sueldo</button>';
+  h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="darBaja()">Dar de baja</button></p>';
+  return h;
+}
+function borrarConsumo(id){ guardar({...datos,consumos:datos.consumos.filter(c=>c.id!==id)}); }
+function darBaja(){
+  const e=panel.emp;
+  if(saldoEmp(e.id)>0) return notificar("Primero resolvé el saldo pendiente.");
+  guardar({...datos,empleados:datos.empleados.map(x=>x.id===e.id?{...x,activo:false}:x)});
+  listo("Empleado dado de baja.");
+}
+
+/* ---------- liquidación ---------- */
+function vLiquidar(){
+  const e=panel.emp;
+  const pend=datos.consumos.filter(c=>c.empleadoId===e.id&&!c.liquidado);
+  return '<div class="card"><p style="font-weight:500;margin-bottom:12px">'+esc(e.nombre)+'</p>'+
+   '<div class="mb"><label><span>Sueldo a pagar</span><input id="ls" inputmode="decimal" value="'+(e.sueldo+e.viaticos)+'" oninput="recalcLiquidar()"></label></div>'+
+   '<div class="resumen mb"><p class="tiny" style="margin-bottom:6px">Consumos y adelantos pendientes</p>'+
+   (pend.length ? pend.map(c=>'<div class="fila"><span>'+esc(etiqueta(c))+'</span><span>'+$$(c.monto)+'</span></div>').join("") : '<p class="muted">Ninguno.</p>')+'</div>'+
+   '<div class="mb"><label><span>Pagar desde</span><select id="lo"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label></div>'+
+   '<div class="resumen" id="resLiq"></div></div>'+
+   '<button class="btn" onclick="guardarLiquidacion()">Liquidar sueldo</button>';
+}
+function recalcLiquidar(){
+  const e=panel.emp;
+  const deuda=saldoEmp(e.id), bruto=num(val("ls")), ap=Math.min(deuda,bruto);
+  document.getElementById("resLiq").innerHTML =
+    fila("Costo salarial",$$(bruto))+fila("A descontar","−"+$$(ap))+fila("Sale de caja",$$(bruto-ap),true)+
+    (deuda>bruto?'<p class="tiny" style="margin-top:6px">El saldo supera el sueldo. Quedan '+$$(deuda-bruto)+' para la próxima.</p>':"");
+}
+function guardarLiquidacion(){
+  const e=panel.emp, bruto=num(val("ls")), origen=val("lo");
+  if(bruto<=0) return notificar("Poné el sueldo.");
+  const deuda=saldoEmp(e.id), ap=Math.min(deuda,bruto);
+  let resto=ap;
+  const consumos=datos.consumos.map(c=>{
+    if(c.empleadoId!==e.id||c.liquidado) return c;
+    if(resto>=c.monto){ resto-=c.monto; return {...c,liquidado:true}; }
+    return c;
+  });
+  guardar({...datos,consumos,liquidaciones:[...datos.liquidaciones,
+    {id:uid8(),fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,origen}]});
+  listo(deuda>bruto ? "Liquidado. Quedan "+$$(deuda-bruto)+" pendientes." : "Liquidado. Cuenta en cero.");
+}
+
+/* ---------- nuevo empleado ---------- */
+function vNuevoEmp(){
+  return '<div class="card"><div class="mb"><label><span>Nombre</span><input id="nn"></label></div>'+
+   '<div class="row"><label><span>Sueldo</span><input id="ns" inputmode="decimal" placeholder="0"></label>'+
+   '<label><span>Viáticos</span><input id="nv" inputmode="decimal" placeholder="0"></label></div></div>'+
+   '<button class="btn" onclick="guardarEmpleado()">Agregar empleado</button>';
+}
+function guardarEmpleado(){
+  const n=val("nn").trim();
+  if(!n) return notificar("Poné el nombre.");
+  guardar({...datos,empleados:[...datos.empleados,{id:uid8(),nombre:n,sueldo:num(val("ns")),viaticos:num(val("nv")),activo:true}]});
+  listo("Empleado agregado.");
+}
+
+/* ---------- historial y ajustes ---------- */
+function vAjustes(){
+  const ord=[...datos.cierres].sort((a,b)=>a.fecha<b.fecha?1:-1);
+  const meses=[...new Set(ord.map(c=>ym(c.fecha)))];
+  const d1=panel.desde||ym(hoy())+"-01", d2=panel.hasta||hoy();
+  panel.desde=d1; panel.hasta=d2;
+  let h='<div class="card"><h3 style="margin-bottom:8px">Exportar para analizar</h3><div class="tabs">'+
+   '<button class="tab" onclick="preset(\'mes\')">Este mes</button>'+
+   '<button class="tab" onclick="preset(\'ant\')">Mes pasado</button>'+
+   '<button class="tab" onclick="preset(\'todo\')">Todo</button></div>'+
+   '<div class="row"><label><span>Desde</span><input type="date" id="xd" value="'+d1+'" onchange="panel.desde=this.value;panel.txt=null;render()"></label>'+
+   '<label><span>Hasta</span><input type="date" id="xh" value="'+d2+'" onchange="panel.hasta=this.value;panel.txt=null;render()"></label></div>'+
+   '<button class="btn2" onclick="armarResumen()">Armar resumen</button>';
+  if(panel.txt){
+    h+='<textarea readonly rows="10" style="margin-top:12px" onfocus="this.select()">'+esc(panel.txt)+'</textarea>'+
+       '<div class="row" style="margin-top:8px"><button class="btn2" onclick="copiar()">Copiar</button>'+
+       '<button class="btn2" onclick="bajar()">Descargar</button></div>';
+  }
+  h+='</div>';
+
+  meses.forEach(m=>{
+    const dm=ord.filter(c=>ym(c.fecha)===m);
+    h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
+      '<h3>'+esc(nombreMes(m))+'</h3><span class="fuerte" style="font-size:14px;font-variant-numeric:tabular-nums">'+
+      $$(dm.reduce((s,c)=>s+c.efectivo+c.posnet,0))+'</span></div>'+
+      dm.map(c=>'<div class="item"><div class="txt"><p>'+fec(c.fecha)+'</p><p class="tiny">efectivo '+$$(c.efectivo)+
+      ' · posnet '+$$(c.posnet)+'</p></div><div class="der"><span>'+$$(c.efectivo+c.posnet)+
+      '</span><button class="del" onclick="borrarCierre(\''+c.fecha+'\')">Borrar</button></div></div>').join("")+'</div>';
+  });
+  if(!ord.length) h+='<div class="card"><p class="muted">Todavía no cargaste ningún día.</p></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Arranque</h3><p class="muted">'+fec(datos.inicio.fecha)+
+    ': caja chica '+$$(datos.inicio.cajaChica)+', caja grande '+$$(datos.inicio.cajaGrande)+', banco '+$$(datos.inicio.banco)+'.</p></div>';
+  return h;
+}
+function preset(t){
+  const d=new Date();
+  if(t==="mes"){ panel.desde=ym(hoy())+"-01"; panel.hasta=hoy(); }
+  else if(t==="ant"){
+    const p=new Date(d.getFullYear(),d.getMonth()-1,1);
+    const m=p.getFullYear()+"-"+String(p.getMonth()+1).padStart(2,"0");
+    panel.desde=m+"-01"; panel.hasta=m+"-"+new Date(d.getFullYear(),d.getMonth(),0).getDate();
+  } else {
+    const o=[...datos.cierres].sort((a,b)=>a.fecha<b.fecha?-1:1);
+    panel.desde=o.length?o[0].fecha:datos.inicio.fecha; panel.hasta=hoy();
+  }
+  panel.txt=null; render();
+}
+function borrarCierre(f){ guardar({...datos,cierres:datos.cierres.filter(c=>c.fecha!==f)}); }
+function armarResumen(){
+  const d1=panel.desde,d2=panel.hasta, en=f=>f>=d1&&f<=d2;
+  const cs=datos.cierres.filter(c=>en(c.fecha)).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const gs=datos.gastos.filter(g=>en(g.fecha)).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const ts=datos.traspasos.filter(t=>en(t.fecha));
+  const ls=datos.liquidaciones.filter(l=>en(l.fecha));
+  const ms=datos.consumos.filter(c=>en(c.fecha));
+  const s=calcular(datos);
+  const ef=cs.reduce((a,c)=>a+c.efectivo,0), po=cs.reduce((a,c)=>a+c.posnet,0);
+  const chicos=cs.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"], pd={};
+  cs.forEach(c=>{ const p=c.fecha.split("-").map(Number); const n=dias[new Date(p[0],p[1]-1,p[2]).getDay()];
+    pd[n]=pd[n]||{t:0,n:0}; pd[n].t+=c.efectivo+c.posnet; pd[n].n++; });
+  const pc={}; gs.forEach(g=>pc[g.categoria]=(pc[g.categoria]||0)+g.monto);
+
+  const L=["GRANJA LOS ABUELOS — "+fec(d1)+" al "+fec(d2),"","VENTAS",
+    "Días cargados: "+cs.length,"Total: "+$$(ef+po)+" (efectivo "+$$(ef)+", posnet "+$$(po)+")"];
+  if(cs.length) L.push("Promedio diario: "+$$((ef+po)/cs.length));
+  L.push("");
+  if(Object.keys(pd).length){
+    L.push("PROMEDIO POR DÍA DE SEMANA");
+    Object.entries(pd).sort((a,b)=>b[1].t/b[1].n-a[1].t/a[1].n).forEach(([k,v])=>L.push(k+": "+$$(v.t/v.n)+" ("+v.n+" días)"));
+    L.push("");
+  }
+  L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; retiro; quedó; gastos chicos; saldo banco; sin acreditar)");
+  cs.forEach(c=>L.push([c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.banco,c.difBanco].join("; ")));
+  L.push("","GASTOS CHICOS DE CAJA: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y BANCO");
+  if(!gs.length) L.push("Ninguno.");
+  Object.entries(pc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>L.push(k+": "+$$(v)));
+  if(gs.length){
+    L.push("Detalle (fecha; categoría; importe; origen):");
+    gs.forEach(g=>L.push(g.fecha+"; "+g.categoria+(g.nota?" ("+g.nota+")":"")+"; "+g.monto+"; "+(g.origen==="efectivo"?"caja grande":"banco")));
+  }
+  L.push("","TRASPASOS");
+  if(!ts.length) L.push("Ninguno.");
+  ts.forEach(t=>L.push(t.fecha+"; "+(t.sentido==="be"?"banco a efectivo":"efectivo a banco")+"; "+t.monto+"; comisión "+(t.comision||0)));
+  L.push("","EMPLEADOS");
+  datos.empleados.forEach(e=>{
+    const mi=ms.filter(c=>c.empleadoId===e.id);
+    const con=mi.filter(c=>c.tipo!=="adelanto").reduce((a,c)=>a+c.monto,0);
+    const ade=mi.filter(c=>c.tipo==="adelanto").reduce((a,c)=>a+c.monto,0);
+    L.push(e.nombre+(e.activo?"":" (baja)")+": sueldo "+$$(e.sueldo+e.viaticos)+"; mercadería "+$$(con)+"; adelantos "+$$(ade)+"; pendiente hoy "+$$(saldoEmp(e.id)));
+  });
+  L.push("","LIQUIDACIONES");
+  if(!ls.length) L.push("Ninguna.");
+  ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"caja grande":"banco")));
+  L.push("","SALDOS AL DÍA DE HOY","Caja chica: "+$$(s.cajaChica),"Caja grande: "+$$(s.cajaGrande),
+    "Banco: "+$$(s.banco),"Total disponible: "+$$(s.total));
+  panel.txt=L.join("\n");
+  render();
+}
+function copiar(){
+  navigator.clipboard.writeText(panel.txt).then(()=>notificar("Copiado. Pegalo en el chat."))
+    .catch(()=>notificar("Seleccioná el texto y copialo a mano."));
+}
+function bajar(){
+  const a=document.createElement("a");
+  a.href="data:text/plain;charset=utf-8,"+encodeURIComponent(panel.txt);
+  a.download="granja-"+panel.desde+"-a-"+panel.hasta+".txt";
+  a.click();
+  notificar("Archivo descargado.");
+}
+
+iniciar();
+</script>
+</body>
+</html>
