@@ -67,6 +67,10 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .ok{color:#15803d;font-size:13px}
 .centro{max-width:320px;margin:80px auto;text-align:center}
 textarea{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#fafaf9;line-height:1.5}
+.ojo{background:none;border:none;color:#78716c;padding:4px;display:flex;align-items:center}
+.oculto{letter-spacing:2px;color:#a8a29e}
+.desplegar{width:100%;background:none;border:none;padding:0;display:flex;justify-content:space-between;align-items:center;font-weight:400;color:inherit}
+.flecha{color:#a8a29e;font-size:13px}
 .badge{font-size:11px;color:#78716c;border:1px solid #e7e5e4;border-radius:20px;padding:2px 8px}
 @media(max-width:400px){.row{grid-template-columns:1fr}}
 </style>
@@ -105,8 +109,19 @@ const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos
 const EQUILIBRIO = 395000;
 const NUBE = FIREBASE_CONFIG.apiKey.indexOf("PEGAR") !== 0;
 const LKEY = "granja_caja_v1";
+/* Usuarios: a la izquierda lo que escribís, a la derecha el mail real de la cuenta.
+   El mail real sirve para recuperar la contraseña. Para agregar otro usuario,
+   sumá una línea con el mismo formato. */
+const USUARIOS = {
+  "gonzalo": "gonzaloarenosolegal@gmail.com"
+};
+const DOMINIO = "@granjalosabuelos.app";  /* para usuarios sin mail asociado */
 
 let datos = null, panel = null, uid = null, db = null, aviso = "", timerAviso = null;
+let verMontos = false, verEmpleados = false;
+const OJO_ON='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const OJO_OFF='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 19c-6.5 0-10-7-10-7a18 18 0 0 1 5.1-5.9M9.9 4.2A10 10 0 0 1 12 4c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22"/></svg>';
+const oc = v => verMontos ? $$(v) : '<span class="oculto">••••••</span>';
 
 /* ---------- utilidades ---------- */
 const hoy = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
@@ -198,25 +213,38 @@ function cargarSDK(){
 }
 
 /* ---------- login ---------- */
+function aMail(v){
+  v=v.trim().toLowerCase();
+  if(USUARIOS[v]) return USUARIOS[v];
+  return v.indexOf("@")>0 ? v : v.replace(/[^a-z0-9._-]/g,"")+DOMINIO;
+}
+async function recuperar(){
+  const bruto=val("mail").trim();
+  if(!bruto) return notificar("Escribí tu usuario y volvé a tocar recuperar.");
+  const e=aMail(bruto);
+  if(e.indexOf(DOMINIO)>0) return notificar("Ese usuario no tiene un mail asociado, no se puede recuperar por correo.");
+  try { await firebase.auth().sendPasswordResetEmail(e); notificar("Te mandamos un mail para cambiar la clave."); }
+  catch(err){ notificar(traducir(err.code)); }
+}
 async function entrar(){
-  const e=val("mail").trim(), p=val("pass");
-  if(e.indexOf("@")<0) return notificar('Escribí un mail completo, con @. Quedó puesto: "'+e+'"');
-  if(!p) return notificar("Falta la contraseña.");
+  const e=aMail(val("mail")), p=val("pass");
+  if(!val("mail").trim()) return notificar("Escribí tu usuario o mail.");
+  if(!p) return notificar("Falta la clave.");
   try { await firebase.auth().signInWithEmailAndPassword(e,p); }
   catch(err){ notificar(traducir(err.code)); }
 }
 async function crearCuenta(){
-  const e=val("mail").trim(), p=val("pass");
-  if(e.indexOf("@")<0||e.indexOf(".")<0) return notificar('Escribí un mail completo, con @. Quedó puesto: "'+e+'"');
-  if(p.length<6) return notificar("La contraseña necesita al menos 6 caracteres.");
+  const bruto=val("mail").trim(), e=aMail(bruto), p=val("pass");
+  if(bruto.length<3) return notificar("Elegí un usuario de al menos 3 letras.");
+  if(!/^\d{6,}$/.test(p)) return notificar("La clave tiene que ser de 6 números o más.");
   try { await firebase.auth().createUserWithEmailAndPassword(e,p); }
   catch(err){ notificar(traducir(err.code)); }
 }
 function salir(){ firebase.auth().signOut(); }
 function traducir(c){
-  const m={"auth/invalid-credential":"No existe esa cuenta o la contraseña no coincide. Si es la primera vez, usá Crear cuenta.","auth/wrong-password":"Contraseña incorrecta.",
-  "auth/user-not-found":"No existe esa cuenta.","auth/email-already-in-use":"Ese mail ya tiene cuenta.",
-  "auth/invalid-email":"El mail no es válido.","auth/weak-password":"La contraseña es muy corta.",
+  const m={"auth/invalid-credential":"No existe ese usuario o la clave no coincide. Si es la primera vez, usá Crear cuenta.","auth/wrong-password":"Clave incorrecta.",
+  "auth/user-not-found":"No existe ese usuario.","auth/email-already-in-use":"Ese usuario ya existe. Usá Entrar.",
+  "auth/invalid-email":"El usuario tiene caracteres no permitidos. Usá solo letras y números.","auth/weak-password":"La clave es muy corta: usá 6 números o más.",
   "auth/network-request-failed":"Sin conexión.",
   "auth/operation-not-allowed":"Falta habilitar Email/Password en Firebase (Authentication > Sign-in method)."};
   return m[c]||("Error: "+c);
@@ -243,10 +271,11 @@ function vLogin(){
   return '<div class="centro"><div class="card">'+
     '<h2 style="margin-bottom:4px">Granja Los Abuelos</h2><p class="muted" style="margin-bottom:16px">Caja diaria</p>'+
     '<div id="avisoLogin"></div>'+
-    '<div class="mb"><label><span>Mail</span><input id="mail" type="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tumail@gmail.com"></label></div>'+
-    '<div class="mb"><label><span>Contraseña</span><input id="pass" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres" onkeydown="if(event.key===\'Enter\')entrar()"></label></div>'+
+    '<div class="mb"><label><span>Usuario</span><input id="mail" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gonzalo"></label></div>'+
+    '<div class="mb"><label><span>Clave numérica</span><input id="pass" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password" placeholder="mínimo 6 números" oninput="this.value=this.value.replace(/\\D/g,\'\')" onkeydown="if(event.key===\'Enter\')entrar()"></label></div>'+
     '<button class="btn" onclick="entrar()">Entrar</button>'+
     '<p style="margin-top:12px"><button class="btn2" onclick="crearCuenta()">Crear cuenta la primera vez</button></p>'+
+    '<p style="margin-top:12px;text-align:center"><button class="link" onclick="recuperar()">Olvidé mi clave</button></p>'+
     '</div></div>';
 }
 
@@ -271,10 +300,13 @@ function vInicio(){
     ...datos.consumos.filter(c=>c.tipo==="adelanto").map(c=>({...c,k:"consumos",t:"Adelanto",s:(datos.empleados.find(e=>e.id===c.empleadoId)||{}).nombre||""}))
   ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,6);
 
-  let h='<div class="card"><div class="total"><span class="muted">Disponible</span><b>'+$$(s.total)+'</b></div><div class="row3">'+
-    '<div class="mini"><p>Caja chica</p><p>'+$$(s.cajaChica)+'</p></div>'+
-    '<div class="mini"><p>Caja grande</p><p>'+$$(s.cajaGrande)+'</p></div>'+
-    '<div class="mini"><p>Banco</p><p>'+$$(s.banco)+'</p></div></div></div>';
+  let h='<div class="card"><div class="total"><span class="muted">Disponible</span>'+
+    '<span style="display:flex;align-items:center;gap:10px"><b>'+oc(s.total)+'</b>'+
+    '<button class="ojo" onclick="verMontos=!verMontos;render()">'+(verMontos?OJO_ON:OJO_OFF)+'</button></span></div>'+
+    '<div class="row3">'+
+    '<div class="mini"><p>Caja chica</p><p>'+oc(s.cajaChica)+'</p></div>'+
+    '<div class="mini"><p>Caja grande</p><p>'+oc(s.cajaGrande)+'</p></div>'+
+    '<div class="mini"><p>Banco</p><p>'+oc(s.banco)+'</p></div></div></div>';
 
   h+='<button class="big'+(cargado?" hecho":"")+'" onclick="abrir(\'cierre\')">'+(cargado?"&#10003; Día cargado · editar":"Cerrar el día")+'</button>';
   h+='<div class="acciones"><button class="acc" onclick="abrir(\'gasto\')">Gasto</button>'+
@@ -292,11 +324,15 @@ function vInicio(){
                        : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
   h+='</div>';
 
-  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
-     '<h3>Empleados</h3><button class="link" onclick="abrir(\'nuevoEmp\')">Agregar</button></div>';
-  h+= act.length ? act.map(e=>'<button class="emp" onclick="verEmpleado(\''+e.id+'\')"><span style="font-size:14px">'+esc(e.nombre)+
-     '</span><span class="s"><p>'+$$(saldoEmp(e.id))+'</p><p class="tiny">a descontar</p></span></button>').join("")
-     : '<p class="muted">No hay empleados cargados.</p>';
+  h+='<div class="card"><button class="desplegar" onclick="verEmpleados=!verEmpleados;render()">'+
+     '<h3>Empleados</h3><span class="flecha">'+act.length+' '+(verEmpleados?'&#9650;':'&#9660;')+'</span></button>';
+  if(verEmpleados){
+    h+='<div style="margin-top:8px">';
+    h+= act.length ? act.map(e=>'<button class="emp" onclick="verEmpleado(\''+e.id+'\')"><span style="font-size:14px">'+esc(e.nombre)+
+       '</span><span class="s"><p>'+$$(saldoEmp(e.id))+'</p><p class="tiny">a descontar</p></span></button>').join("")
+       : '<p class="muted">No hay empleados cargados.</p>';
+    h+='<p style="margin-top:10px"><button class="link" onclick="abrir(\'nuevoEmp\')">Agregar empleado</button></p></div>';
+  }
   h+='</div>';
 
   if(recientes.length){
