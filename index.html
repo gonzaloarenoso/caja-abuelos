@@ -310,6 +310,12 @@ function calcular(d){
   cs.forEach(c=>cajaGrande+=c.retiro||0);
   d.gastos.forEach(g=>{ if(g.origen==="efectivo") cajaGrande-=g.monto; else if(g.fecha>corte) banco-=g.monto; });
   d.liquidaciones.forEach(l=>{ if(l.origen==="efectivo") cajaGrande-=l.neto; else if(l.fecha>corte) banco-=l.neto; });
+  d.pedidos.forEach(x=>{
+    if(!x.pagado) return;
+    const g=pagoDe(x);
+    cajaGrande-=g.efe;
+    if(x.fecha>corte) banco-=g.ban;
+  });
   d.consumos.forEach(c=>{ if(c.tipo!=="adelanto") return; if(c.origen==="efectivo") cajaGrande-=c.monto; else if(c.fecha>corte) banco-=c.monto; });
   d.traspasos.forEach(t=>{ const n=t.monto-(t.comision||0);
     if(t.sentido==="be"){ cajaGrande+=n; if(t.fecha>corte) banco-=t.monto; }
@@ -349,9 +355,14 @@ function completar(d){
   d.gastos = d.gastos.map(g=> g.categoria==="Retiro del dueño" ? {...g,categoria:CAT_RETIRO} : g);
   return d;
 }
+function pagoDe(x){
+  if(!x.pagado) return {efe:0,ban:0};
+  if(x.pagEfe!==undefined||x.pagBan!==undefined) return {efe:x.pagEfe||0,ban:x.pagBan||0};
+  return x.origen==="banco" ? {efe:0,ban:x.monto} : {efe:x.monto,ban:0};
+}
 function deudaProv(pr){
   const ini=pr.saldoIni||0;
-  const ped=ini+datos.pedidos.filter(x=>x.provId===pr.id).reduce((a,x)=>a+x.monto,0);
+  const ped=ini+datos.pedidos.filter(x=>x.provId===pr.id&&!x.pagado).reduce((a,x)=>a+x.monto,0);
   const pag=datos.gastos.filter(g=>g.categoria===pr.nombre).reduce((a,g)=>a+g.monto,0);
   return ped-pag;
 }
@@ -485,8 +496,9 @@ function vInicio(){
   const sum=(arr,campo,orig)=>arr.filter(x=>x.origen===orig).reduce((a,x)=>a+x[campo],0);
   const gOper=delMesG.filter(g=>g.categoria!==CAT_RETIRO);
   const gRet=delMesG.filter(g=>g.categoria===CAT_RETIRO);
-  const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo");
-  const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco");
+  const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo") + pedPag.reduce((a,x)=>a+pagoDe(x).efe,0);
+  const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco") + pedPag.reduce((a,x)=>a+pagoDe(x).ban,0);
+  const pedPag=datos.pedidos.filter(x=>x.pagado&&ym(x.fecha)===m);
   const ret = gRet.reduce((a,g)=>a+g.monto,0);
   const deuda = deudaTotal();
   const cargado=datos.cierres.some(c=>c.fecha===hoy());
@@ -589,6 +601,7 @@ function movBanco(f){
   datos.gastos.forEach(g=>{ if(g.origen==="banco"&&g.fecha===f) m-=g.monto; });
   datos.liquidaciones.forEach(l=>{ if(l.origen==="banco"&&l.fecha===f) m-=l.neto; });
   datos.consumos.forEach(c=>{ if(c.tipo==="adelanto"&&c.origen==="banco"&&c.fecha===f) m-=c.monto; });
+  datos.pedidos.forEach(x=>{ if(x.pagado&&x.fecha===f) m-=pagoDe(x).ban; });
   datos.traspasos.forEach(t=>{ if(t.fecha!==f) return; m += t.sentido==="be" ? -t.monto : t.monto-(t.comision||0); });
   return m;
 }
@@ -806,6 +819,8 @@ function vPedido(){
   if(esPollo){
     h+='<div class="row"><label><span>Cajones</span><input id="pc" inputmode="decimal" placeholder="0" value="'+(e&&e.cajones?e.cajones:"")+'" oninput="recalcPedido()"></label>'+
        '<label><span>Importe por cajón</span><input id="pu" inputmode="decimal" placeholder="0" value="'+(e&&e.unitario?e.unitario:"")+'" oninput="recalcPedido()"></label></div>'+
+       '<div class="row"><label><span>Otros productos</span><input id="po" inputmode="decimal" placeholder="0" value="'+(e&&e.otros?e.otros:"")+'" oninput="recalcPedido()"></label>'+
+       '<label><span>Qué fue</span><input id="pn" placeholder="pan rallado, huevos…" value="'+esc(e&&e.otrosNota?e.otrosNota:"")+'"></label></div>'+
        '<input type="hidden" id="pm" value="'+(e?e.monto:0)+'">';
   } else {
     h+='<p class="tiny" style="margin-bottom:8px">Detalle por producto (opcional). Si lo dejás vacío, cargá solo el total.</p>';
@@ -822,6 +837,16 @@ function vPedido(){
        '<div class="mb"><label><span>Total del pedido</span><input id="pm" inputmode="decimal" placeholder="0" value="'+(e?e.monto:"")+'" oninput="recalcPedido()"></label></div>';
   }
 
+  const pag = panel.pagado===undefined ? (e?!!e.pagado:false) : panel.pagado;
+  panel.pagado = pag;
+  h+='<div class="tabs" style="margin-bottom:12px">'+
+     '<button class="tab'+(pag?"":" on")+'" onclick="panel.pagado=false;render()">Va a cuenta</button>'+
+     '<button class="tab'+(pag?" on":"")+'" onclick="panel.pagado=true;render()">Pagado contraentrega</button></div>'+
+     (pag?(function(){
+        const g=e?pagoDe(e):{efe:0,ban:0};
+        return '<div class="row"><label><span>Pagué en efectivo</span><input id="pge" inputmode="decimal" placeholder="0" value="'+(g.efe||"")+'" oninput="recalcPedido()"></label>'+
+               '<label><span>Pagué por banco</span><input id="pgb" inputmode="decimal" placeholder="0" value="'+(g.ban||"")+'" oninput="recalcPedido()"></label></div>';
+      })():"");
   h+='<div class="mb"><label><span>Saldo que me informó el proveedor (opcional)</span><input id="pi" inputmode="decimal" placeholder="0" value="'+(e&&e.informado?e.informado:"")+'" oninput="recalcPedido()"></label></div>'+
    '<div class="resumen" id="resPed"></div>'+
    '<p class="tiny" style="margin-top:8px">Los pagos se descuentan solos cuando registrás un gasto con la categoría '+esc(pr.nombre)+'.</p></div>'+
@@ -843,13 +868,16 @@ function recalcPedido_(){
   let monto;
   let h="";
   if(esPollo){
-    const caj=num(val("pc")), uni=num(val("pu"));
-    monto=caj*uni;
+    const caj=num(val("pc")), uni=num(val("pu")), otr=num(val("po"));
+    const solopollo=caj*uni;
+    monto=solopollo+otr;
     const kg=caj*datos.kgCajon;
     document.getElementById("pm").value=monto;
+    if(caj) h+=fila("Pollo",$$(solopollo));
+    if(otr) h+=fila("Otros productos",$$(otr));
     h+=fila("Total del pedido",$$(monto),true);
     if(caj) h+=fila("Kilos estimados",fmt(kg)+" kg ("+fmt(datos.kgCajon)+" por cajón)");
-    if(kg) h+=fila("Costo por kilo",$$(monto/kg));
+    if(kg) h+=fila("Costo por kilo de pollo",$$(solopollo/kg));
   } else {
     const det=(panel.det||[]).filter(d=>d.monto>0);
     if(det.length){
@@ -861,9 +889,21 @@ function recalcPedido_(){
     } else monto=num(val("pm"));
     h+=fila("Total del pedido",$$(monto),true);
   }
-  const previa=deudaProv(pr) - (panel.edit ? (datos.pedidos.find(x=>x.id===panel.edit)||{monto:0}).monto : 0);
-  const nuevoS=previa+monto;
-  h+=fila("Deuda antes",$$(previa))+fila("Deuda después",$$(nuevoS),true);
+  const ant=panel.edit ? (datos.pedidos.find(x=>x.id===panel.edit)||{}) : {};
+  const previa=deudaProv(pr) - ((ant.monto&&!ant.pagado) ? ant.monto : 0);
+  const nuevoS=previa+(panel.pagado?0:monto);
+  if(panel.pagado){
+    const pe=num(val("pge")), pb=num(val("pgb")), falta=monto-pe-pb;
+    if(pe) h+=fila("Sale de efectivo",$$(pe));
+    if(pb) h+=fila("Sale de la cuenta bancaria",$$(pb));
+    if(Math.abs(falta)>1){
+      h+=fila(falta>0?"Falta asignar":"Asignaste de más",$$(Math.abs(falta)),true);
+      h+='<p class="tiny" style="margin-top:6px;color:#b91c1c">Lo pagado tiene que sumar '+$$(monto)+'.</p>';
+    } else h+=fila("Total pagado",$$(pe+pb),true);
+    h+=fila("Deuda con "+pr.nombre,$$(previa));
+  } else {
+    h+=fila("Deuda antes",$$(previa))+fila("Deuda después",$$(nuevoS),true);
+  }
   const inf=num(val("pi"));
   if(inf){
     const d=inf-nuevoS;
@@ -877,12 +917,14 @@ function guardarPedido(){
   const pr=datos.proveedores.find(x=>x.id===panel.prov);
   const esPollo = pr.nombre.toLowerCase().indexOf("pollo")>=0;
   const m=num(val("pm"));
-  if(m<=0) return notificar(esPollo?"Poné los cajones y el importe por cajón.":"Poné el total del pedido.");
-  const reg={id:panel.edit||uid8(),fecha:val("pf"),provId:panel.prov,monto:m,informado:num(val("pi"))||null};
-  if(esPollo){ reg.cajones=num(val("pc")); reg.unitario=num(val("pu")); reg.kg=reg.cajones*datos.kgCajon; }
+  if(m<=0) return notificar(esPollo?"Poné los cajones y el importe por cajón, o el importe de otros productos.":"Poné el total del pedido.");
+  const reg={id:panel.edit||uid8(),fecha:val("pf"),provId:panel.prov,monto:m,informado:num(val("pi"))||null,pagado:!!panel.pagado,pagEfe:panel.pagado?num(val("pge")):0,pagBan:panel.pagado?num(val("pgb")):0};
+  if(panel.pagado && Math.abs(reg.pagEfe+reg.pagBan-m)>1)
+    return notificar("Lo pagado en efectivo y por banco tiene que sumar "+$$(m)+".");
+  if(esPollo){ reg.cajones=num(val("pc")); reg.unitario=num(val("pu")); reg.kg=reg.cajones*datos.kgCajon; reg.otros=num(val("po"))||0; reg.otrosNota=val("pn"); }
   else { const d=(panel.det||[]).filter(x=>x.monto>0||x.cant>0); if(d.length) reg.detalle=d; }
   const lista = panel.edit ? datos.pedidos.map(x=>x.id===panel.edit?reg:x) : [...datos.pedidos,reg];
-  panel.det=null;
+  panel.det=null; panel.pagado=undefined;
   guardar({...datos,pedidos:lista});
   listo(panel.edit?"Pedido modificado.":"Pedido registrado.");
 }
@@ -951,8 +993,10 @@ function vMovs(){
 
   datos.pedidos.filter(x=>ym(x.fecha)===m).forEach(x=>items.push({fecha:x.fecha,
     t:"Pedido a "+nomP(x.provId),
-    sub:(x.cajones?x.cajones+" cajones":"")+(x.detalle?x.detalle.length+" productos":"")||"sin detalle",
-    monto:x.monto, signo:"deuda",
+    sub:((x.cajones?x.cajones+" cajones":"")+(x.detalle?x.detalle.length+" productos":"")||"sin detalle")+
+        (x.pagado?(function(){const g=pagoDe(x);
+   return " · pagado "+(g.efe&&g.ban?"mitad y mitad":(g.ban?"por banco":"en efectivo"));})():" · a cuenta"),
+    monto:x.monto, signo:x.pagado?"−":"deuda",
     acc:'<button class="link" onclick="panel={tipo:\'pedido\',edit:\''+x.id+'\'};render()">Editar</button>'}));
 
   datos.traspasos.filter(x=>ym(x.fecha)===m).forEach(t=>items.push({fecha:t.fecha,
@@ -1035,7 +1079,8 @@ function vInforme(){
   const provPollo=datos.proveedores.find(pr=>pr.nombre.toLowerCase().indexOf("pollo")>=0);
   const pollo=peds.filter(x=>provPollo&&x.provId===provPollo.id);
   const kgPollo=pollo.reduce((a,x)=>a+(x.kg||0),0);
-  const plataPollo=pollo.reduce((a,x)=>a+x.monto,0);
+  const plataPollo=pollo.reduce((a,x)=>a+(x.monto-(x.otros||0)),0);
+  const plataOtros=pollo.reduce((a,x)=>a+(x.otros||0),0);
   const cajones=pollo.reduce((a,x)=>a+(x.cajones||0),0);
 
   const comp={}, gast={};
@@ -1053,7 +1098,8 @@ function vInforme(){
   h+='<div class="card"><h3 style="margin-bottom:8px">Pollo</h3><div class="resumen">'+
     fila("Cajones comprados",fmt(cajones))+
     fila("Kilos estimados",fmt(kgPollo)+" kg")+
-    fila("Plata gastada",$$(plataPollo))+
+    fila("Plata en pollo",$$(plataPollo))+
+    (plataOtros?fila("Otros productos del mismo proveedor",$$(plataOtros)):"")+
     (kgPollo?fila("Costo por kilo",$$(plataPollo/kgPollo),true):"")+
     '</div><p class="tiny" style="margin-top:8px">Calculado con '+fmt(datos.kgCajon)+' kg por cajón. Se cambia en Historial y ajustes.</p></div>';
 
