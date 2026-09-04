@@ -122,7 +122,16 @@ const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<"
 const val = id => { const e=document.getElementById(id); return e?e.value:""; };
 const etiqueta = c => fec(c.fecha)+" · "+(c.tipo==="adelanto"?"adelanto":(c.nota||"mercadería"));
 
-function notificar(t){ aviso=t; clearTimeout(timerAviso); render(); timerAviso=setTimeout(()=>{aviso="";render();},2600); }
+function notificar(t){
+  const el=document.getElementById("avisoLogin");
+  clearTimeout(timerAviso);
+  if(el){
+    el.innerHTML='<div class="aviso">'+esc(t)+'</div>';
+    timerAviso=setTimeout(()=>{ const e2=document.getElementById("avisoLogin"); if(e2) e2.innerHTML=""; },4000);
+    return;
+  }
+  aviso=t; render(); timerAviso=setTimeout(()=>{aviso="";render();},2600);
+}
 
 /* ---------- saldos ---------- */
 function calcular(d){
@@ -190,20 +199,22 @@ function cargarSDK(){
 
 /* ---------- login ---------- */
 async function entrar(){
-  const e=val("mail"), p=val("pass");
-  if(!e||!p) return notificar("Completá mail y contraseña.");
+  const e=val("mail").trim(), p=val("pass");
+  if(e.indexOf("@")<0) return notificar('Escribí un mail completo, con @. Quedó puesto: "'+e+'"');
+  if(!p) return notificar("Falta la contraseña.");
   try { await firebase.auth().signInWithEmailAndPassword(e,p); }
   catch(err){ notificar(traducir(err.code)); }
 }
 async function crearCuenta(){
-  const e=val("mail"), p=val("pass");
-  if(!e||p.length<6) return notificar("La contraseña necesita al menos 6 caracteres.");
+  const e=val("mail").trim(), p=val("pass");
+  if(e.indexOf("@")<0||e.indexOf(".")<0) return notificar('Escribí un mail completo, con @. Quedó puesto: "'+e+'"');
+  if(p.length<6) return notificar("La contraseña necesita al menos 6 caracteres.");
   try { await firebase.auth().createUserWithEmailAndPassword(e,p); }
   catch(err){ notificar(traducir(err.code)); }
 }
 function salir(){ firebase.auth().signOut(); }
 function traducir(c){
-  const m={"auth/invalid-credential":"Mail o contraseña incorrectos.","auth/wrong-password":"Contraseña incorrecta.",
+  const m={"auth/invalid-credential":"No existe esa cuenta o la contraseña no coincide. Si es la primera vez, usá Crear cuenta.","auth/wrong-password":"Contraseña incorrecta.",
   "auth/user-not-found":"No existe esa cuenta.","auth/email-already-in-use":"Ese mail ya tiene cuenta.",
   "auth/invalid-email":"El mail no es válido.","auth/weak-password":"La contraseña es muy corta.",
   "auth/network-request-failed":"Sin conexión.",
@@ -231,11 +242,11 @@ function render(){
 function vLogin(){
   return '<div class="centro"><div class="card">'+
     '<h2 style="margin-bottom:4px">Granja Los Abuelos</h2><p class="muted" style="margin-bottom:16px">Caja diaria</p>'+
-    (aviso?'<div class="aviso">'+esc(aviso)+'</div>':'')+
-    '<div class="mb"><label><span>Mail</span><input id="mail" type="email" autocomplete="username"></label></div>'+
-    '<div class="mb"><label><span>Contraseña</span><input id="pass" type="password" autocomplete="current-password" onkeydown="if(event.key===\'Enter\')entrar()"></label></div>'+
+    '<div id="avisoLogin"></div>'+
+    '<div class="mb"><label><span>Mail</span><input id="mail" type="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="tumail@gmail.com"></label></div>'+
+    '<div class="mb"><label><span>Contraseña</span><input id="pass" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres" onkeydown="if(event.key===\'Enter\')entrar()"></label></div>'+
     '<button class="btn" onclick="entrar()">Entrar</button>'+
-    '<p style="margin-top:12px"><button class="link" onclick="crearCuenta()">Crear cuenta la primera vez</button></p>'+
+    '<p style="margin-top:12px"><button class="btn2" onclick="crearCuenta()">Crear cuenta la primera vez</button></p>'+
     '</div></div>';
 }
 
