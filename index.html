@@ -82,12 +82,12 @@ textarea{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#faf
    Mientras diga PEGAR_ACA, la app guarda solo en este dispositivo.
    ========================================================================== */
 const FIREBASE_CONFIG = {
-  apiKey: "PEGAR_ACA",
-  authDomain: "PEGAR_ACA",
-  projectId: "PEGAR_ACA",
-  storageBucket: "PEGAR_ACA",
-  messagingSenderId: "PEGAR_ACA",
-  appId: "PEGAR_ACA"
+  apiKey: "AIzaSyAYvWsAYcC4H5Givd44jsAX34MubjWfnRY",
+  authDomain: "granja-los-abuelos-55288.firebaseapp.com",
+  projectId: "granja-los-abuelos-55288",
+  storageBucket: "granja-los-abuelos-55288.firebasestorage.app",
+  messagingSenderId: "901054215189",
+  appId: "1:901054215189:web:14a424bae2ff1cfe9a8a1c"
 };
 
 /* Saldos con los que arranca la app la primera vez */
@@ -103,7 +103,7 @@ const INICIAL = {
 
 const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro del dueño","Otros"];
 const EQUILIBRIO = 395000;
-const NUBE = FIREBASE_CONFIG.apiKey !== "PEGAR_ACA";
+const NUBE = FIREBASE_CONFIG.apiKey.indexOf("PEGAR") !== 0;
 const LKEY = "granja_caja_v1";
 
 let datos = null, panel = null, uid = null, db = null, aviso = "", timerAviso = null;
@@ -206,7 +206,8 @@ function traducir(c){
   const m={"auth/invalid-credential":"Mail o contraseña incorrectos.","auth/wrong-password":"Contraseña incorrecta.",
   "auth/user-not-found":"No existe esa cuenta.","auth/email-already-in-use":"Ese mail ya tiene cuenta.",
   "auth/invalid-email":"El mail no es válido.","auth/weak-password":"La contraseña es muy corta.",
-  "auth/network-request-failed":"Sin conexión."};
+  "auth/network-request-failed":"Sin conexión.",
+  "auth/operation-not-allowed":"Falta habilitar Email/Password en Firebase (Authentication > Sign-in method)."};
   return m[c]||("Error: "+c);
 }
 
