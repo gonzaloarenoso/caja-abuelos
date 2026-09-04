@@ -63,7 +63,7 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .tab{flex:1;padding:9px;background:#fff;border:1px solid #d6d3d1;color:#57534e;font-weight:400}
 .tab.on{background:#292524;color:#fff;border-color:#292524}
 .volver{background:none;border:none;color:#57534e;font-size:14px;padding:0;margin-bottom:12px;font-weight:400}
-.errorbox{background:#b91c1c;color:#fff;font-size:13px;padding:10px 14px;line-height:1.4}
+.errorbox{background:#b91c1c;color:#fff;font-size:13px;padding:10px 14px;line-height:1.4;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .detfila2{display:grid;grid-template-columns:1fr 80px 28px;gap:8px;align-items:center;margin-bottom:6px}
 .detfila2>span:first-child{font-size:14px}
 .detfila{display:grid;grid-template-columns:1fr 70px 90px 26px;gap:6px;align-items:center;margin-bottom:6px}
@@ -257,10 +257,17 @@ let datos = null, panel = null, uid = null, db = null, aviso = "", timerAviso = 
 function mostrarError(msg){
   let b=document.getElementById("errorbox");
   if(!b){ b=document.createElement("div"); b.id="errorbox"; b.className="errorbox"; document.body.insertBefore(b,document.body.firstChild); }
-  b.textContent="Error: "+msg;
+  b.innerHTML='<span>Error: '+esc(msg)+'</span><button onclick="this.parentNode.remove()" style="background:none;border:none;color:#fff;font-size:18px;padding:0 4px">&times;</button>';
 }
-window.onerror=function(msg,src,lin){ mostrarError(msg+"  (línea "+lin+")"); };
-window.addEventListener("unhandledrejection",e=>mostrarError((e.reason&&e.reason.message)||e.reason));
+window.onerror=function(msg,src,lin){
+  if(!msg || String(msg).indexOf("Script error")===0) return;   /* error opaco de otro dominio: sin datos utiles */
+  mostrarError(msg+"  (línea "+lin+")");
+};
+window.addEventListener("unhandledrejection",e=>{
+  const m=(e.reason&&e.reason.message)||String(e.reason||"");
+  if(m.indexOf("persistence")>=0||m.indexOf("Persistence")>=0) return;  /* el modo sin conexion no siempre esta disponible */
+  mostrarError(m);
+});
 let verMontos = false, verEmpleados = false;
 const OJO_ON='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 const OJO_OFF='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 19c-6.5 0-10-7-10-7a18 18 0 0 1 5.1-5.9M9.9 4.2A10 10 0 0 1 12 4c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22"/></svg>';
@@ -361,7 +368,7 @@ async function iniciar(){
   try {
     await db.enablePersistence({synchronizeTabs:true});
   } catch(e) {
-    /* si falla (navegador viejo o modo incognito) la app sigue funcionando online */
+    try { await db.enablePersistence(); } catch(e2) { /* sin guardado local: la app funciona igual con conexión */ }
   }
   window.addEventListener("online", pintarConexion);
   window.addEventListener("offline", pintarConexion);
@@ -380,7 +387,7 @@ function cargarSDK(){
               "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js",
               "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"];
   return urls.reduce((p,u)=>p.then(()=>new Promise((res,rej)=>{
-    const s=document.createElement("script"); s.src=u; s.onload=res; s.onerror=()=>rej(new Error("No se pudo cargar Firebase")); document.head.appendChild(s);
+    const s=document.createElement("script"); s.crossOrigin="anonymous"; s.src=u; s.onload=res; s.onerror=()=>rej(new Error("No se pudo cargar Firebase")); document.head.appendChild(s);
   })), Promise.resolve());
 }
 
