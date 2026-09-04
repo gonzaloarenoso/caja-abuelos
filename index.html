@@ -366,8 +366,9 @@ function render(){
   const titulos={cierre:"Cierre del día",gasto:"Nuevo gasto",traspaso:"Traspaso",empMov:"Cargar a un empleado",
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   const cuerpo={cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,ajustes:vAjustes}[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,ajustes:vAjustes}[panel.tipo]();
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
+  if(panel.tipo==="gasto"&&panel.edit){}
   if(panel.tipo==="cierre") recalcCierre();
   if(panel.tipo==="traspaso") recalcTraspaso();
   if(panel.tipo==="liquidar") recalcLiquidar();
@@ -396,12 +397,17 @@ function vInicio(){
   const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
   const prom=dm.length?ventas/dm.length:0;
   const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
-  const grandes=datos.gastos.filter(g=>ym(g.fecha)===m).reduce((a,g)=>a+g.monto,0);
+  const delMesG=datos.gastos.filter(g=>ym(g.fecha)===m);
+  const delMesL=datos.liquidaciones.filter(l=>ym(l.fecha)===m);
+  const delMesA=datos.consumos.filter(c=>c.tipo==="adelanto"&&ym(c.fecha)===m);
+  const sum=(arr,campo,orig)=>arr.filter(x=>x.origen===orig).reduce((a,x)=>a+x[campo],0);
+  const efe = sum(delMesG,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo");
+  const ban = sum(delMesG,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco");
   const cargado=datos.cierres.some(c=>c.fecha===hoy());
   const act=datos.empleados.filter(e=>e.activo);
 
   const recientes=[
-    ...datos.gastos.map(g=>({...g,k:"gastos",t:g.categoria+(g.nota?" · "+g.nota:""),s:g.origen==="efectivo"?"caja grande":"banco"})),
+    ...datos.gastos.map(g=>({...g,k:"gastos",t:g.categoria+(g.nota?" · "+g.nota:""),s:g.origen==="efectivo"?"efectivo":"banco"})),
     ...datos.traspasos.map(t=>({...t,k:"traspasos",t:t.sentido==="be"?"Banco a efectivo":"Efectivo a banco",s:t.comision?"comisión "+$$(t.comision):"sin comisión"})),
     ...datos.consumos.filter(c=>c.tipo==="adelanto").map(c=>({...c,k:"consumos",t:"Adelanto",s:(datos.empleados.find(e=>e.id===c.empleadoId)||{}).nombre||""}))
   ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,6);
@@ -411,7 +417,7 @@ function vInicio(){
     '<button class="ojo" onclick="verMontos=!verMontos;render()">'+(verMontos?OJO_ON:OJO_OFF)+'</button></span></div>'+
     '<div class="row3">'+
     '<div class="mini"><p>Caja chica</p><p>'+oc(s.cajaChica)+'</p></div>'+
-    '<div class="mini"><p>Caja grande</p><p>'+oc(s.cajaGrande)+'</p></div>'+
+    '<div class="mini"><p>Efectivo</p><p>'+oc(s.cajaGrande)+'</p></div>'+
     '<div class="mini"><p>Banco</p><p>'+oc(s.banco)+'</p></div></div></div>';
 
   h+='<button class="big'+(cargado?" hecho":"")+'" onclick="abrir(\'cierre\')">'+(cargado?"&#10003; Día cargado · editar":"Cerrar el día")+'</button>';
@@ -421,11 +427,12 @@ function vInicio(){
 
   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'+
      '<h3>'+esc(nombreMes(m))+'</h3><button class="link" onclick="abrir(\'ajustes\')">Historial y ajustes</button></div><div class="resumen">'+
-     fila("Ventas · "+dm.length+(dm.length===1?" día":" días"),$$(ventas),true)+
-     fila("Promedio diario",$$(prom))+
-     fila("Gastos chicos de caja",$$(chicos))+
-     fila("Gastos de caja grande y banco",$$(grandes))+'</div>';
-  if(dm.length) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
+     fila("Ventas · "+dm.length+(dm.length===1?" día":" días"),oc(ventas),true)+
+     fila("Promedio diario",oc(prom))+
+     fila("Gastos en efectivo",oc(efe))+
+     fila("Gastos de cuenta bancaria",oc(ban))+
+     fila("Gastos chicos del cajón",oc(chicos))+'</div>';
+  if(dm.length && verMontos) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
      (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
                        : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
   h+='</div>';
@@ -442,7 +449,8 @@ function vInicio(){
   h+='</div>';
 
   if(recientes.length){
-    h+='<div class="card"><h3 style="margin-bottom:8px">Últimos movimientos</h3>'+
+    h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
+      '<h3>Últimos movimientos</h3><button class="link" onclick="abrir(\'movs\')">Ver todos y editar</button></div>'+
       recientes.map(r=>'<div class="item"><div class="txt"><p>'+esc(r.t)+'</p><p class="tiny">'+fec(r.fecha)+' · '+esc(r.s)+
       '</p></div><div class="der"><span>'+$$(r.monto)+'</span><button class="del" onclick="borrarMov(\''+r.k+'\',\''+r.id+'\')">Borrar</button></div></div>').join("")+'</div>';
   }
@@ -507,46 +515,59 @@ function guardarCierre(){
 
 /* ---------- gasto ---------- */
 function vGasto(){
+  const g = panel.edit ? datos.gastos.find(x=>x.id===panel.edit) : null;
+  const cat = c => '<option'+(g&&g.categoria===c?' selected':'')+'>'+c+'</option>';
   return '<div class="card">'+
-   '<div class="row"><label><span>Fecha</span><input type="date" id="gf" value="'+hoy()+'"></label>'+
-   '<label><span>Categoría</span><select id="gc">'+CATEGORIAS.map(c=>'<option>'+c+'</option>').join("")+'</select></label></div>'+
-   '<div class="row"><label><span>Importe</span><input id="gm" inputmode="decimal" placeholder="0"></label>'+
-   '<label><span>Salió de</span><select id="go"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label></div>'+
-   '<div class="mb"><label><span>Detalle (opcional)</span><input id="gn"></label></div></div>'+
-   '<button class="btn" onclick="guardarGasto()">Registrar gasto</button>';
+   '<div class="row"><label><span>Fecha</span><input type="date" id="gf" value="'+(g?g.fecha:hoy())+'"></label>'+
+   '<label><span>Categoría</span><select id="gc">'+CATEGORIAS.map(cat).join("")+'</select></label></div>'+
+   '<div class="row"><label><span>Importe</span><input id="gm" inputmode="decimal" placeholder="0" value="'+(g?g.monto:"")+'"></label>'+
+   '<label><span>Salió de</span><select id="go"><option value="efectivo"'+(g&&g.origen==="efectivo"?' selected':'')+'>Efectivo</option>'+
+   '<option value="banco"'+(g&&g.origen==="banco"?' selected':'')+'>Banco</option></select></label></div>'+
+   '<div class="mb"><label><span>Detalle (opcional)</span><input id="gn" value="'+esc(g?g.nota:"")+'"></label></div></div>'+
+   '<button class="btn" onclick="guardarGasto()">'+(g?"Guardar cambios":"Registrar gasto")+'</button>'+
+   (g?'<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarMov(\'gastos\',\''+g.id+'\');volver()">Borrar este gasto</button></p>':"");
 }
 function guardarGasto(){
   const m=num(val("gm"));
   if(m<=0) return notificar("Poné el importe.");
-  guardar({...datos,gastos:[...datos.gastos,{id:uid8(),fecha:val("gf"),categoria:val("gc"),monto:m,origen:val("go"),nota:val("gn")}]});
-  listo("Gasto registrado.");
+  const reg={id:panel.edit||uid8(),fecha:val("gf"),categoria:val("gc"),monto:m,origen:val("go"),nota:val("gn")};
+  const lista = panel.edit ? datos.gastos.map(x=>x.id===panel.edit?reg:x) : [...datos.gastos,reg];
+  guardar({...datos,gastos:lista});
+  listo(panel.edit?"Gasto modificado.":"Gasto registrado.");
 }
 
 /* ---------- traspaso ---------- */
 function vTraspaso(){
+  const t = panel.edit ? datos.traspasos.find(x=>x.id===panel.edit) : null;
+  const con = t && t.comision;
   return '<div class="card">'+
-   '<div class="row"><label><span>Fecha</span><input type="date" id="tf" value="'+hoy()+'"></label>'+
-   '<label><span>Sentido</span><select id="ts" onchange="recalcTraspaso()"><option value="be">Del banco al efectivo</option><option value="eb">Del efectivo al banco</option></select></label></div>'+
-   '<div class="mb"><label><span>Importe</span><input id="tm" inputmode="decimal" placeholder="0" oninput="recalcTraspaso()"></label></div>'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="tf" value="'+(t?t.fecha:hoy())+'"></label>'+
+   '<label><span>Sentido</span><select id="ts" onchange="recalcTraspaso()">'+
+   '<option value="be"'+(t&&t.sentido==="be"?' selected':'')+'>Del banco al efectivo</option>'+
+   '<option value="eb"'+(t&&t.sentido==="eb"?' selected':'')+'>Del efectivo al banco</option></select></label></div>'+
+   '<div class="mb"><label><span>Importe</span><input id="tm" inputmode="decimal" placeholder="0" value="'+(t?t.monto:"")+'" oninput="recalcTraspaso()"></label></div>'+
    '<label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px">'+
-   '<input type="checkbox" id="tk" onchange="recalcTraspaso()" style="width:16px"> Hubo comisión</label>'+
-   '<div id="tcom" style="display:none" class="mb"><label><span>Comisión</span><input id="tc" inputmode="decimal" placeholder="0" oninput="recalcTraspaso()"></label></div>'+
+   '<input type="checkbox" id="tk"'+(con?' checked':'')+' onchange="recalcTraspaso()" style="width:16px"> Hubo comisión</label>'+
+   '<div id="tcom" style="display:none" class="mb"><label><span>Comisión</span><input id="tc" inputmode="decimal" placeholder="0" value="'+(con?t.comision:"")+'" oninput="recalcTraspaso()"></label></div>'+
    '<div class="resumen" id="resTras"></div></div>'+
-   '<button class="btn" onclick="guardarTraspaso()">Registrar traspaso</button>';
+   '<button class="btn" onclick="guardarTraspaso()">'+(t?"Guardar cambios":"Registrar traspaso")+'</button>'+
+   (t?'<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarMov(\'traspasos\',\''+t.id+'\');volver()">Borrar este traspaso</button></p>':"");
 }
 function recalcTraspaso(){
   const con=document.getElementById("tk").checked;
   document.getElementById("tcom").style.display = con ? "block" : "none";
   const m=num(val("tm")), c=con?num(val("tc")):0, be=val("ts")==="be";
   document.getElementById("resTras").innerHTML =
-    fila(be?"Sale del banco":"Sale de caja grande",$$(m))+fila(be?"Entra en caja grande":"Entra en el banco",$$(m-c),true);
+    fila(be?"Sale del banco":"Sale del efectivo",$$(m))+fila(be?"Entra en el efectivo":"Entra en el banco",$$(m-c),true);
 }
 function guardarTraspaso(){
   const m=num(val("tm")), con=document.getElementById("tk").checked, c=con?num(val("tc")):0;
   if(m<=0) return notificar("Poné el importe.");
   if(c>=m) return notificar("La comisión no puede ser mayor al importe.");
-  guardar({...datos,traspasos:[...datos.traspasos,{id:uid8(),fecha:val("tf"),sentido:val("ts"),monto:m,comision:c}]});
-  listo("Traspaso registrado.");
+  const reg={id:panel.edit||uid8(),fecha:val("tf"),sentido:val("ts"),monto:m,comision:c};
+  const lista = panel.edit ? datos.traspasos.map(x=>x.id===panel.edit?reg:x) : [...datos.traspasos,reg];
+  guardar({...datos,traspasos:lista});
+  listo(panel.edit?"Traspaso modificado.":"Traspaso registrado.");
 }
 
 /* ---------- consumo / adelanto ---------- */
@@ -561,7 +582,7 @@ function vEmpMov(){
    '<label><span>Empleado</span><select id="me">'+act.map(e=>'<option value="'+e.id+'">'+esc(e.nombre)+'</option>').join("")+'</select></label></div>'+
    '<div class="row"><label><span>Importe</span><input id="mm" inputmode="decimal" placeholder="0"></label>'+
    (t==="adelanto"
-     ? '<label><span>Salió de</span><select id="mo"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label>'
+     ? '<label><span>Salió de</span><select id="mo"><option value="efectivo">Efectivo</option><option value="banco">Banco</option></select></label>'
      : '<label><span>Qué se llevó (opcional)</span><input id="mn"></label>')+'</div>'+
    '<p class="tiny">'+(t==="adelanto"?"Sale de la caja que elijas y se descuenta del próximo sueldo.":"No toca la caja: solo queda como saldo a descontar.")+'</p></div>'+
    '<button class="btn" onclick="guardarMov()">'+(t==="adelanto"?"Registrar adelanto":"Cargar consumo")+'</button>';
@@ -615,7 +636,7 @@ function vLiquidar(){
    '<div class="mb"><label><span>Sueldo a pagar</span><input id="ls" inputmode="decimal" value="'+(e.sueldo+e.viaticos)+'" oninput="recalcLiquidar()"></label></div>'+
    '<div class="resumen mb"><p class="tiny" style="margin-bottom:6px">Consumos y adelantos pendientes</p>'+
    (pend.length ? pend.map(c=>'<div class="fila"><span>'+esc(etiqueta(c))+'</span><span>'+$$(c.monto)+'</span></div>').join("") : '<p class="muted">Ninguno.</p>')+'</div>'+
-   '<div class="mb"><label><span>Pagar desde</span><select id="lo"><option value="efectivo">Caja grande</option><option value="banco">Banco</option></select></label></div>'+
+   '<div class="mb"><label><span>Pagar desde</span><select id="lo"><option value="efectivo">Efectivo</option><option value="banco">Banco</option></select></label></div>'+
    '<div class="resumen" id="resLiq"></div></div>'+
    '<button class="btn" onclick="guardarLiquidacion()">Liquidar sueldo</button>';
 }
@@ -630,14 +651,15 @@ function guardarLiquidacion(){
   const e=panel.emp, bruto=num(val("ls")), origen=val("lo");
   if(bruto<=0) return notificar("Poné el sueldo.");
   const deuda=saldoEmp(e.id), ap=Math.min(deuda,bruto);
+  const idLiq=uid8();
   let resto=ap;
   const consumos=datos.consumos.map(c=>{
     if(c.empleadoId!==e.id||c.liquidado) return c;
-    if(resto>=c.monto){ resto-=c.monto; return {...c,liquidado:true}; }
+    if(resto>=c.monto){ resto-=c.monto; return {...c,liquidado:true,liqId:idLiq}; }
     return c;
   });
   guardar({...datos,consumos,liquidaciones:[...datos.liquidaciones,
-    {id:uid8(),fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,origen}]});
+    {id:idLiq,fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,origen}]});
   listo(deuda>bruto ? "Liquidado. Quedan "+$$(deuda-bruto)+" pendientes." : "Liquidado. Cuenta en cero.");
 }
 
@@ -653,6 +675,65 @@ function guardarEmpleado(){
   if(!n) return notificar("Poné el nombre.");
   guardar({...datos,empleados:[...datos.empleados,{id:uid8(),nombre:n,sueldo:num(val("ns")),viaticos:num(val("nv")),activo:true}]});
   listo("Empleado agregado.");
+}
+
+/* ---------- registro de movimientos ---------- */
+function vMovs(){
+  const meses=[...new Set([].concat(
+    datos.cierres.map(c=>ym(c.fecha)), datos.gastos.map(g=>ym(g.fecha)),
+    datos.traspasos.map(t=>ym(t.fecha)), datos.consumos.map(c=>ym(c.fecha)),
+    datos.liquidaciones.map(l=>ym(l.fecha))))].sort().reverse();
+  if(!meses.length) meses.push(ym(hoy()));
+  const m = panel.mes && meses.indexOf(panel.mes)>=0 ? panel.mes : meses[0];
+  panel.mes = m;
+  const nom = id => { const e=datos.empleados.find(x=>x.id===id); return e?e.nombre:"empleado"; };
+  const items=[];
+
+  datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
+    t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+" · quedó "+$$(c.quedo),
+    monto:c.efectivo+c.posnet, signo:"+",
+    acc:'<button class="link" onclick="panel={tipo:\'cierre\',fecha:\''+c.fecha+'\'};render()">Editar</button>'}));
+
+  datos.gastos.filter(x=>ym(x.fecha)===m).forEach(g=>items.push({fecha:g.fecha,
+    t:g.categoria+(g.nota?" · "+g.nota:""), sub:g.origen==="efectivo"?"efectivo":"cuenta bancaria",
+    monto:g.monto, signo:"−",
+    acc:'<button class="link" onclick="panel={tipo:\'gasto\',edit:\''+g.id+'\'};render()">Editar</button>'}));
+
+  datos.traspasos.filter(x=>ym(x.fecha)===m).forEach(t=>items.push({fecha:t.fecha,
+    t:t.sentido==="be"?"Traspaso banco a efectivo":"Traspaso efectivo a banco",
+    sub:t.comision?"comisión "+$$(t.comision):"sin comisión", monto:t.monto, signo:"=",
+    acc:'<button class="link" onclick="panel={tipo:\'traspaso\',edit:\''+t.id+'\'};render()">Editar</button>'}));
+
+  datos.consumos.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
+    t:(c.tipo==="adelanto"?"Adelanto a ":"Mercadería a ")+nom(c.empleadoId),
+    sub:(c.tipo==="adelanto"?(c.origen==="efectivo"?"efectivo":"cuenta bancaria"):(c.nota||"consumo"))+(c.liquidado?" · ya descontado":" · pendiente"),
+    monto:c.monto, signo:c.tipo==="adelanto"?"−":"",
+    acc:c.liquidado?"":'<button class="del" onclick="borrarMov(\'consumos\',\''+c.id+'\')">Borrar</button>'}));
+
+  datos.liquidaciones.filter(x=>ym(x.fecha)===m).forEach(l=>items.push({fecha:l.fecha,
+    t:"Sueldo de "+l.nombre, sub:"bruto "+$$(l.bruto)+" · descontado "+$$(l.descontado)+" · "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria"),
+    monto:l.neto, signo:"−",
+    acc:'<button class="del" onclick="anularLiq(\''+l.id+'\')">Anular</button>'}));
+
+  items.sort((a,b)=> a.fecha===b.fecha ? 0 : (a.fecha<b.fecha?1:-1));
+
+  let h='<div class="card"><label><span>Mes</span><select onchange="panel.mes=this.value;render()">'+
+    meses.map(x=>'<option value="'+x+'"'+(x===m?' selected':'')+'>'+esc(nombreMes(x))+'</option>').join("")+
+    '</select></label><p class="tiny" style="margin-top:8px">'+items.length+(items.length===1?' movimiento':' movimientos')+'</p></div>';
+
+  if(!items.length) return h+'<div class="card"><p class="muted">No hay movimientos en este mes.</p></div>';
+
+  h+='<div class="card">'+items.map(i=>
+    '<div class="item"><div class="txt"><p>'+esc(i.t)+'</p><p class="tiny">'+fec(i.fecha)+' · '+esc(i.sub)+'</p></div>'+
+    '<div class="der"><span>'+i.signo+' '+$$(i.monto)+'</span>'+i.acc+'</div></div>').join("")+'</div>';
+  return h;
+}
+function anularLiq(id){
+  const l=datos.liquidaciones.find(x=>x.id===id);
+  if(!l) return;
+  const consumos=datos.consumos.map(c=> c.liqId===id ? {...c,liquidado:false,liqId:null} : c);
+  guardar({...datos,consumos,liquidaciones:datos.liquidaciones.filter(x=>x.id!==id)});
+  notificar("Liquidación anulada. Los consumos vuelven a quedar pendientes.");
 }
 
 /* ---------- historial y ajustes ---------- */
@@ -695,7 +776,7 @@ function vAjustes(){
   if(!ord.length) h+='<div class="card"><p class="muted">Todavía no cargaste ningún día.</p></div>';
 
   h+='<div class="card"><h3 style="margin-bottom:8px">Arranque</h3><p class="muted">'+fec(datos.inicio.fecha)+
-    ': caja chica '+$$(datos.inicio.cajaChica)+', caja grande '+$$(datos.inicio.cajaGrande)+', banco '+$$(datos.inicio.banco)+'.</p></div>';
+    ': caja chica '+$$(datos.inicio.cajaChica)+', efectivo '+$$(datos.inicio.cajaGrande)+', banco '+$$(datos.inicio.banco)+'.</p></div>';
   return h;
 }
 function preset(t){
@@ -747,12 +828,12 @@ function armarResumen(){
   cs.forEach(c=>L.push(c.hist
     ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","planilla anterior"].join("; ")
     : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.banco,c.difBanco].join("; ")));
-  L.push("","GASTOS CHICOS DE CAJA: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y BANCO");
+  L.push("","GASTOS CHICOS PAGADOS DEL CAJÓN: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y CUENTA BANCARIA");
   if(!gs.length) L.push("Ninguno.");
   Object.entries(pc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>L.push(k+": "+$$(v)));
   if(gs.length){
     L.push("Detalle (fecha; categoría; importe; origen):");
-    gs.forEach(g=>L.push(g.fecha+"; "+g.categoria+(g.nota?" ("+g.nota+")":"")+"; "+g.monto+"; "+(g.origen==="efectivo"?"caja grande":"banco")));
+    gs.forEach(g=>L.push(g.fecha+"; "+g.categoria+(g.nota?" ("+g.nota+")":"")+"; "+g.monto+"; "+(g.origen==="efectivo"?"efectivo":"cuenta bancaria")));
   }
   if(hs.length){
     const g={POLLO:0,CONGELADOS:0,OTROS:0,SUELDOS:0,"CARGAS SOCIALES":0};
@@ -776,8 +857,8 @@ function armarResumen(){
   });
   L.push("","LIQUIDACIONES");
   if(!ls.length) L.push("Ninguna.");
-  ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"caja grande":"banco")));
-  L.push("","SALDOS AL DÍA DE HOY","Caja chica: "+$$(s.cajaChica),"Caja grande: "+$$(s.cajaGrande),
+  ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria")));
+  L.push("","SALDOS AL DÍA DE HOY","Caja chica: "+$$(s.cajaChica),"Efectivo: "+$$(s.cajaGrande),
     "Banco: "+$$(s.banco),"Total disponible: "+$$(s.total));
   panel.txt=L.join("\n");
   render();
