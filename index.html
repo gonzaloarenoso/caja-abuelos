@@ -496,9 +496,9 @@ function vInicio(){
   const sum=(arr,campo,orig)=>arr.filter(x=>x.origen===orig).reduce((a,x)=>a+x[campo],0);
   const gOper=delMesG.filter(g=>g.categoria!==CAT_RETIRO);
   const gRet=delMesG.filter(g=>g.categoria===CAT_RETIRO);
+  const pedPag=datos.pedidos.filter(x=>x.pagado&&ym(x.fecha)===m);
   const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo") + pedPag.reduce((a,x)=>a+pagoDe(x).efe,0);
   const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco") + pedPag.reduce((a,x)=>a+pagoDe(x).ban,0);
-  const pedPag=datos.pedidos.filter(x=>x.pagado&&ym(x.fecha)===m);
   const ret = gRet.reduce((a,g)=>a+g.monto,0);
   const deuda = deudaTotal();
   const cargado=datos.cierres.some(c=>c.fecha===hoy());
