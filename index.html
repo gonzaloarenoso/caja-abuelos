@@ -21,7 +21,11 @@ h3{font-size:14px;font-weight:500;color:#57534e}
 .tiny{color:#78716c;font-size:12px}
 label{display:block}
 label>span{display:block;font-size:12px;color:#78716c;margin-bottom:4px}
-input,select,textarea{width:100%;padding:9px 11px;background:#fff;border:1px solid #d6d3d1;border-radius:6px;font-size:16px;color:#1c1917;font-family:inherit}
+input,select,textarea{width:100%;max-width:100%;min-width:0;padding:9px 11px;background:#fff;border:1px solid #d6d3d1;border-radius:6px;font-size:16px;color:#1c1917;font-family:inherit}
+input[type=date]{-webkit-appearance:none;appearance:none;min-height:40px;display:block}
+select{-webkit-appearance:none;appearance:none;padding-right:26px;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:14px}
+.row>*,.row3>*,.acciones4>*,.detfila>*,.detfila2>*{min-width:0}
+label{min-width:0}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#78716c}
 input[type=checkbox]{width:16px;height:16px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
@@ -526,13 +530,13 @@ function vInicio(){
                        : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
   h+='</div>';
 
-  const provs=datos.proveedores.filter(pr=>deudaProv(pr)!==0);
-  if(provs.length){
-    h+='<div class="card"><h3 style="margin-bottom:8px">Deuda con proveedores</h3><div class="resumen">'+
-      provs.map(pr=>fila(pr.nombre,oc(deudaProv(pr)))).join("")+
-      fila("Total","−"+oc(deuda),true)+'</div>'+
-      '<p style="margin-top:10px"><button class="link" onclick="abrir(\'pedido\')">Registrar pedido de hoy</button></p></div>';
-  }
+  const provs=datos.proveedores;
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'+
+    '<h3>Deuda con proveedores</h3><button class="link" onclick="abrir(\'pedido\')">Registrar pedido</button></div><div class="resumen">'+
+    provs.map(pr=>fila(pr.nombre,oc(deudaProv(pr)))).join("")+
+    fila("Total",oc(deuda),true)+'</div>'+
+    (deuda===0?'<p class="tiny" style="margin-top:8px">Si ya le debías algo antes de empezar, cargalo en Historial y ajustes.</p>':'')+
+    '</div>';
 
   h+='<div class="card"><button class="desplegar" onclick="verEmpleados=!verEmpleados;render()">'+
      '<h3>Empleados</h3><span class="flecha">'+act.length+' '+(verEmpleados?'&#9650;':'&#9660;')+'</span></button>';
