@@ -44,6 +44,7 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .mini p:first-child{font-size:11px;color:#78716c}
 .mini p:last-child{font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
 .acciones{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+.acciones4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px}
 .acc{padding:14px 4px;background:#fff;border:1px solid #e7e5e4;border-radius:10px;color:#44403c;font-size:12px;font-weight:400}
 .acc:hover{background:#fafaf9}
 .big{width:100%;padding:14px;background:#292524;color:#fff;border:none;margin-bottom:12px;font-size:16px}
@@ -62,6 +63,11 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .tab{flex:1;padding:9px;background:#fff;border:1px solid #d6d3d1;color:#57534e;font-weight:400}
 .tab.on{background:#292524;color:#fff;border-color:#292524}
 .volver{background:none;border:none;color:#57534e;font-size:14px;padding:0;margin-bottom:12px;font-weight:400}
+.detfila2{display:grid;grid-template-columns:1fr 80px 28px;gap:8px;align-items:center;margin-bottom:6px}
+.detfila2>span:first-child{font-size:14px}
+.detfila{display:grid;grid-template-columns:1fr 70px 90px 26px;gap:6px;align-items:center;margin-bottom:6px}
+.detfila select,.detfila input{padding:7px 8px;font-size:14px}
+.offline{background:#fef3c7;color:#92400e;font-size:13px;padding:9px 12px;border-radius:6px;margin-bottom:16px}
 .aviso{background:#292524;color:#fff;font-size:14px;padding:9px 12px;border-radius:6px;margin-bottom:16px}
 .error{color:#b91c1c;font-size:13px;margin-top:8px}
 .ok{color:#15803d;font-size:13px}
@@ -102,7 +108,8 @@ const INICIAL = {
     { id:"e2", nombre:"Monserrat Maldonado", sueldo:850000, viaticos:50000, activo:true },
     { id:"e3", nombre:"Braian Perez", sueldo:750000, viaticos:0, activo:true }
   ],
-  cierres:[], gastos:[], traspasos:[], consumos:[], liquidaciones:[]
+  cierres:[], gastos:[], traspasos:[], consumos:[], liquidaciones:[], pedidos:[],
+  proveedores:[{id:"pr1",nombre:"Pollo"},{id:"pr2",nombre:"Congelados"}]
 };
 
 
@@ -211,7 +218,29 @@ const HISTORICO = [
 const HIST_DESDE = HISTORICO.length ? HISTORICO[0].f : "";
 const HIST_HASTA = HISTORICO.length ? HISTORICO[HISTORICO.length-1].f : "";
 
-const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro del dueño","Otros"];
+const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro de socio","Otros"];
+const CAT_RETIRO = "Retiro de socio";
+const KG_CAJON_DEF = 17;
+const PRODUCTOS_BASE = [
+{id:"pd01",n:"Papas Noisettes",u:"kg",activo:true},
+{id:"pd02",n:"Filete de Merluza rebozado",u:"kg",activo:true},
+{id:"pd03",n:"Bocaditos de Espinaca",u:"kg",activo:true},
+{id:"pd04",n:"Bocaditos de calabaza",u:"kg",activo:true},
+{id:"pd05",n:"Nuggets de pollo crocante",u:"kg",activo:true},
+{id:"pd06",n:"Nuggets de Brócoli",u:"kg",activo:true},
+{id:"pd07",n:"Barritas de papa jamón y queso",u:"kg",activo:true},
+{id:"pd08",n:"Barrita de Merluza Rebozada",u:"kg",activo:true},
+{id:"pd09",n:"Aros de Cebolla",u:"kg",activo:true},
+{id:"pd10",n:"Barritas de Muzzarella",u:"kg",activo:true},
+{id:"pd11",n:"Papas tradicionales",u:"kg",activo:true},
+{id:"pd12",n:"Papas Smiles",u:"kg",activo:true},
+{id:"pd13",n:"Burger de Espinaca",u:"un",activo:true},
+{id:"pd14",n:"Burger de Lenteja",u:"un",activo:true},
+{id:"pd15",n:"Burger de Remolacha",u:"un",activo:true},
+{id:"pd16",n:"Burger de Zapallo al Curry",u:"un",activo:true},
+{id:"pd17",n:"Burger de Garbanzo y Zanahoria",u:"un",activo:true},
+{id:"pd18",n:"Burger de Quínoa y Yamaní",u:"un",activo:true}
+];
 const EQUILIBRIO = 395000;
 const NUBE = FIREBASE_CONFIG.apiKey.indexOf("PEGAR") !== 0;
 const LKEY = "granja_caja_v1";
@@ -283,8 +312,30 @@ async function guardar(nuevo){
   try {
     if(NUBE && db && uid) await db.collection("caja").doc(uid).set(datos);
     else localStorage.setItem(LKEY, JSON.stringify(datos));
-  } catch(e){ notificar("No se pudo guardar: "+e.message); }
+  } catch(e){ if(navigator.onLine) notificar("No se pudo guardar: "+e.message); }
 }
+function pintarConexion(){
+  const e=document.getElementById("conexion");
+  if(!e) return;
+  e.innerHTML = navigator.onLine ? "" :
+    '<div class="offline">Sin conexión. Podés seguir cargando: se guarda en el teléfono y se sincroniza solo cuando vuelva la señal.</div>';
+}
+function completar(d){
+  ["cierres","gastos","traspasos","consumos","liquidaciones","pedidos","empleados"].forEach(k=>{ if(!d[k]) d[k]=[]; });
+  if(!d.proveedores||!d.proveedores.length) d.proveedores=[{id:"pr1",nombre:"Pollo"},{id:"pr2",nombre:"Congelados"}];
+  if(!d.ventas) d.ventas=[];
+  if(!d.productos||!d.productos.length) d.productos=JSON.parse(JSON.stringify(PRODUCTOS_BASE));
+  if(!d.kgCajon) d.kgCajon=KG_CAJON_DEF;
+  if(!d.inicio) d.inicio=INICIAL.inicio;
+  d.gastos = d.gastos.map(g=> g.categoria==="Retiro del dueño" ? {...g,categoria:CAT_RETIRO} : g);
+  return d;
+}
+function deudaProv(pr){
+  const ped=datos.pedidos.filter(x=>x.provId===pr.id).reduce((a,x)=>a+x.monto,0);
+  const pag=datos.gastos.filter(g=>g.categoria===pr.nombre).reduce((a,g)=>a+g.monto,0);
+  return ped-pag;
+}
+const deudaTotal = () => datos.proveedores.reduce((a,pr)=>a+Math.max(0,deudaProv(pr)),0);
 function volver(){ panel=null; render(); }
 function listo(msg){ panel=null; notificar(msg); }
 
@@ -292,18 +343,25 @@ function listo(msg){ panel=null; notificar(msg); }
 async function iniciar(){
   if(!NUBE){
     const g = localStorage.getItem(LKEY);
-    datos = g ? JSON.parse(g) : JSON.parse(JSON.stringify(INICIAL));
+    datos = completar(g ? JSON.parse(g) : JSON.parse(JSON.stringify(INICIAL)));
     render();
     return;
   }
   await cargarSDK();
   firebase.initializeApp(FIREBASE_CONFIG);
   db = firebase.firestore();
+  try {
+    await db.enablePersistence({synchronizeTabs:true});
+  } catch(e) {
+    /* si falla (navegador viejo o modo incognito) la app sigue funcionando online */
+  }
+  window.addEventListener("online", pintarConexion);
+  window.addEventListener("offline", pintarConexion);
   firebase.auth().onAuthStateChanged(async u=>{
     if(!u){ uid=null; datos=null; render(); return; }
     uid = u.uid;
     db.collection("caja").doc(uid).onSnapshot(doc=>{
-      datos = doc.exists ? doc.data() : JSON.parse(JSON.stringify(INICIAL));
+      datos = completar(doc.exists ? doc.data() : JSON.parse(JSON.stringify(INICIAL)));
       if(!doc.exists) db.collection("caja").doc(uid).set(datos);
       render();
     }, err=>{ notificar("Error de conexión: "+err.message); });
@@ -361,15 +419,17 @@ function render(){
   const app=document.getElementById("app");
   if(NUBE && !uid){ app.innerHTML=vLogin(); return; }
   if(!datos){ app.innerHTML='<p class="muted" style="padding:40px;text-align:center">Cargando…</p>'; return; }
-  const av = aviso ? '<div class="aviso">'+esc(aviso)+'</div>' : "";
-  if(!panel){ app.innerHTML=vCabecera()+av+vInicio(); return; }
+  const av = '<div id="conexion"></div>' + (aviso ? '<div class="aviso">'+esc(aviso)+'</div>' : "");
+  if(!panel){ app.innerHTML=vCabecera()+av+vInicio(); pintarConexion(); return; }
   const titulos={cierre:"Cierre del día",gasto:"Nuevo gasto",traspaso:"Traspaso",empMov:"Cargar a un empleado",
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   const cuerpo={cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,ajustes:vAjustes}[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,pedido:vPedido,semana:vSemana,informe:vInforme,ajustes:vAjustes}[panel.tipo]();
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
+  pintarConexion();
   if(panel.tipo==="cierre") recalcCierre();
+  if(panel.tipo==="pedido") recalcPedido();
   if(panel.tipo==="traspaso") recalcTraspaso();
   if(panel.tipo==="liquidar") recalcLiquidar();
 }
@@ -401,8 +461,12 @@ function vInicio(){
   const delMesL=datos.liquidaciones.filter(l=>ym(l.fecha)===m);
   const delMesA=datos.consumos.filter(c=>c.tipo==="adelanto"&&ym(c.fecha)===m);
   const sum=(arr,campo,orig)=>arr.filter(x=>x.origen===orig).reduce((a,x)=>a+x[campo],0);
-  const efe = sum(delMesG,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo");
-  const ban = sum(delMesG,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco");
+  const gOper=delMesG.filter(g=>g.categoria!==CAT_RETIRO);
+  const gRet=delMesG.filter(g=>g.categoria===CAT_RETIRO);
+  const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo");
+  const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco");
+  const ret = gRet.reduce((a,g)=>a+g.monto,0);
+  const deuda = deudaTotal();
   const cargado=datos.cierres.some(c=>c.fecha===hoy());
   const act=datos.empleados.filter(e=>e.activo);
 
@@ -418,12 +482,18 @@ function vInicio(){
     '<div class="row3">'+
     '<div class="mini"><p>Caja chica</p><p>'+oc(s.cajaChica)+'</p></div>'+
     '<div class="mini"><p>Efectivo</p><p>'+oc(s.cajaGrande)+'</p></div>'+
-    '<div class="mini"><p>Banco</p><p>'+oc(s.banco)+'</p></div></div></div>';
+    '<div class="mini"><p>Banco</p><p>'+oc(s.banco)+'</p></div></div>'+
+    (deuda>0 ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f5f5f4">'+
+      fila("Deuda con proveedores","−"+oc(deuda))+
+      fila("Queda libre",oc(s.total-deuda),true)+'</div>' : "")+
+    '</div>';
 
   h+='<button class="big'+(cargado?" hecho":"")+'" onclick="abrir(\'cierre\')">'+(cargado?"&#10003; Día cargado · editar":"Cerrar el día")+'</button>';
-  h+='<div class="acciones"><button class="acc" onclick="abrir(\'gasto\')">Gasto</button>'+
+  h+='<div class="acciones4"><button class="acc" onclick="abrir(\'gasto\')">Gasto</button>'+
+     '<button class="acc" onclick="abrir(\'pedido\')">Pedido</button>'+
      '<button class="acc" onclick="abrir(\'traspaso\')">Traspaso</button>'+
-     '<button class="acc" onclick="abrir(\'empMov\')">Empleado</button></div>';
+     '<button class="acc" onclick="abrir(\'empMov\')">Empleado</button>'+
+     '<button class="acc" onclick="abrir(\'semana\')">Semana</button></div>';
 
   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'+
      '<h3>'+esc(nombreMes(m))+'</h3><button class="link" onclick="abrir(\'ajustes\')">Historial y ajustes</button></div><div class="resumen">'+
@@ -431,11 +501,20 @@ function vInicio(){
      fila("Promedio diario",oc(prom))+
      fila("Gastos en efectivo",oc(efe))+
      fila("Gastos de cuenta bancaria",oc(ban))+
-     fila("Gastos chicos del cajón",oc(chicos))+'</div>';
+     fila("Gastos chicos del cajón",oc(chicos))+
+     (ret?fila("Retiros de socios",oc(ret)):"")+'</div>';
   if(dm.length && verMontos) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
      (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
                        : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
   h+='</div>';
+
+  const provs=datos.proveedores.filter(pr=>deudaProv(pr)!==0);
+  if(provs.length){
+    h+='<div class="card"><h3 style="margin-bottom:8px">Deuda con proveedores</h3><div class="resumen">'+
+      provs.map(pr=>fila(pr.nombre,oc(deudaProv(pr)))).join("")+
+      fila("Total","−"+oc(deuda),true)+'</div>'+
+      '<p style="margin-top:10px"><button class="link" onclick="abrir(\'pedido\')">Registrar pedido de hoy</button></p></div>';
+  }
 
   h+='<div class="card"><button class="desplegar" onclick="verEmpleados=!verEmpleados;render()">'+
      '<h3>Empleados</h3><span class="flecha">'+act.length+' '+(verEmpleados?'&#9650;':'&#9660;')+'</span></button>';
@@ -677,63 +756,216 @@ function guardarEmpleado(){
   listo("Empleado agregado.");
 }
 
-/* ---------- registro de movimientos ---------- */
-function vMovs(){
-  const meses=[...new Set([].concat(
-    datos.cierres.map(c=>ym(c.fecha)), datos.gastos.map(g=>ym(g.fecha)),
-    datos.traspasos.map(t=>ym(t.fecha)), datos.consumos.map(c=>ym(c.fecha)),
-    datos.liquidaciones.map(l=>ym(l.fecha))))].sort().reverse();
-  if(!meses.length) meses.push(ym(hoy()));
-  const m = panel.mes && meses.indexOf(panel.mes)>=0 ? panel.mes : meses[0];
-  panel.mes = m;
-  const nom = id => { const e=datos.empleados.find(x=>x.id===id); return e?e.nombre:"empleado"; };
-  const items=[];
+/* ---------- pedidos a proveedores ---------- */
+function vPedido(){
+  const e = panel.edit ? datos.pedidos.find(x=>x.id===panel.edit) : null;
+  const provs = datos.proveedores;
+  const sel = panel.prov || (e?e.provId:provs[0].id);
+  panel.prov = sel;
+  const pr = provs.find(x=>x.id===sel) || provs[0];
+  const esPollo = pr.nombre.toLowerCase().indexOf("pollo")>=0;
+  if(!panel.det) panel.det = e && e.detalle ? e.detalle.slice() : [];
 
-  datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
-    t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+" · quedó "+$$(c.quedo),
-    monto:c.efectivo+c.posnet, signo:"+",
-    acc:'<button class="link" onclick="panel={tipo:\'cierre\',fecha:\''+c.fecha+'\'};render()">Editar</button>'}));
+  let h='<div class="card">'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="pf" value="'+(e?e.fecha:hoy())+'"></label>'+
+   '<label><span>Proveedor</span><select id="pp" onchange="panel.prov=this.value;panel.det=null;render()">'+
+   provs.map(x=>'<option value="'+x.id+'"'+(x.id===sel?' selected':'')+'>'+esc(x.nombre)+'</option>').join("")+
+   '</select></label></div>';
 
-  datos.gastos.filter(x=>ym(x.fecha)===m).forEach(g=>items.push({fecha:g.fecha,
-    t:g.categoria+(g.nota?" · "+g.nota:""), sub:g.origen==="efectivo"?"efectivo":"cuenta bancaria",
-    monto:g.monto, signo:"−",
-    acc:'<button class="link" onclick="panel={tipo:\'gasto\',edit:\''+g.id+'\'};render()">Editar</button>'}));
+  if(esPollo){
+    h+='<div class="row"><label><span>Cajones</span><input id="pc" inputmode="decimal" placeholder="0" value="'+(e&&e.cajones?e.cajones:"")+'" oninput="recalcPedido()"></label>'+
+       '<label><span>Importe por cajón</span><input id="pu" inputmode="decimal" placeholder="0" value="'+(e&&e.unitario?e.unitario:"")+'" oninput="recalcPedido()"></label></div>'+
+       '<input type="hidden" id="pm" value="'+(e?e.monto:0)+'">';
+  } else {
+    h+='<p class="tiny" style="margin-bottom:8px">Detalle por producto (opcional). Si lo dejás vacío, cargá solo el total.</p>';
+    panel.det.forEach((d,i)=>{
+      h+='<div class="detfila">'+
+        '<select onchange="panel.det['+i+'].prodId=this.value">'+
+        datos.productos.filter(x=>x.activo).map(x=>'<option value="'+x.id+'"'+(x.id===d.prodId?' selected':'')+'>'+esc(x.n)+'</option>').join("")+
+        '</select>'+
+        '<input inputmode="decimal" placeholder="cant." value="'+(d.cant||"")+'" oninput="panel.det['+i+'].cant=num(this.value);recalcPedido()">'+
+        '<input inputmode="decimal" placeholder="importe" value="'+(d.monto||"")+'" oninput="panel.det['+i+'].monto=num(this.value);recalcPedido()">'+
+        '<button class="del" onclick="panel.det.splice('+i+',1);render()">&times;</button></div>';
+    });
+    h+='<button class="btn2" style="margin-bottom:12px" onclick="agregarRenglon()">+ Agregar producto</button>'+
+       '<div class="mb"><label><span>Total del pedido</span><input id="pm" inputmode="decimal" placeholder="0" value="'+(e?e.monto:"")+'" oninput="recalcPedido()"></label></div>';
+  }
 
-  datos.traspasos.filter(x=>ym(x.fecha)===m).forEach(t=>items.push({fecha:t.fecha,
-    t:t.sentido==="be"?"Traspaso banco a efectivo":"Traspaso efectivo a banco",
-    sub:t.comision?"comisión "+$$(t.comision):"sin comisión", monto:t.monto, signo:"=",
-    acc:'<button class="link" onclick="panel={tipo:\'traspaso\',edit:\''+t.id+'\'};render()">Editar</button>'}));
-
-  datos.consumos.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
-    t:(c.tipo==="adelanto"?"Adelanto a ":"Mercadería a ")+nom(c.empleadoId),
-    sub:(c.tipo==="adelanto"?(c.origen==="efectivo"?"efectivo":"cuenta bancaria"):(c.nota||"consumo"))+(c.liquidado?" · ya descontado":" · pendiente"),
-    monto:c.monto, signo:c.tipo==="adelanto"?"−":"",
-    acc:c.liquidado?"":'<button class="del" onclick="borrarMov(\'consumos\',\''+c.id+'\')">Borrar</button>'}));
-
-  datos.liquidaciones.filter(x=>ym(x.fecha)===m).forEach(l=>items.push({fecha:l.fecha,
-    t:"Sueldo de "+l.nombre, sub:"bruto "+$$(l.bruto)+" · descontado "+$$(l.descontado)+" · "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria"),
-    monto:l.neto, signo:"−",
-    acc:'<button class="del" onclick="anularLiq(\''+l.id+'\')">Anular</button>'}));
-
-  items.sort((a,b)=> a.fecha===b.fecha ? 0 : (a.fecha<b.fecha?1:-1));
-
-  let h='<div class="card"><label><span>Mes</span><select onchange="panel.mes=this.value;render()">'+
-    meses.map(x=>'<option value="'+x+'"'+(x===m?' selected':'')+'>'+esc(nombreMes(x))+'</option>').join("")+
-    '</select></label><p class="tiny" style="margin-top:8px">'+items.length+(items.length===1?' movimiento':' movimientos')+'</p></div>';
-
-  if(!items.length) return h+'<div class="card"><p class="muted">No hay movimientos en este mes.</p></div>';
-
-  h+='<div class="card">'+items.map(i=>
-    '<div class="item"><div class="txt"><p>'+esc(i.t)+'</p><p class="tiny">'+fec(i.fecha)+' · '+esc(i.sub)+'</p></div>'+
-    '<div class="der"><span>'+i.signo+' '+$$(i.monto)+'</span>'+i.acc+'</div></div>').join("")+'</div>';
+  h+='<div class="mb"><label><span>Saldo que me informó el proveedor (opcional)</span><input id="pi" inputmode="decimal" placeholder="0" value="'+(e&&e.informado?e.informado:"")+'" oninput="recalcPedido()"></label></div>'+
+   '<div class="resumen" id="resPed"></div>'+
+   '<p class="tiny" style="margin-top:8px">Los pagos se descuentan solos cuando registrás un gasto con la categoría '+esc(pr.nombre)+'.</p></div>'+
+   '<button class="btn" onclick="guardarPedido()">'+(e?"Guardar cambios":"Registrar pedido")+'</button>'+
+   (e?'<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarMov(\'pedidos\',\''+e.id+'\');volver()">Borrar este pedido</button></p>':"");
   return h;
 }
-function anularLiq(id){
-  const l=datos.liquidaciones.find(x=>x.id===id);
-  if(!l) return;
-  const consumos=datos.consumos.map(c=> c.liqId===id ? {...c,liquidado:false,liqId:null} : c);
-  guardar({...datos,consumos,liquidaciones:datos.liquidaciones.filter(x=>x.id!==id)});
-  notificar("Liquidación anulada. Los consumos vuelven a quedar pendientes.");
+function agregarRenglon(){
+  const p0=datos.productos.filter(x=>x.activo)[0];
+  panel.det.push({prodId:p0?p0.id:"",cant:0,monto:0});
+  render();
+}
+function recalcPedido(){
+  const pr=datos.proveedores.find(x=>x.id===panel.prov);
+  const esPollo = pr.nombre.toLowerCase().indexOf("pollo")>=0;
+  let monto;
+  let h="";
+  if(esPollo){
+    const caj=num(val("pc")), uni=num(val("pu"));
+    monto=caj*uni;
+    const kg=caj*datos.kgCajon;
+    document.getElementById("pm").value=monto;
+    h+=fila("Total del pedido",$$(monto),true);
+    if(caj) h+=fila("Kilos estimados",fmt(kg)+" kg ("+fmt(datos.kgCajon)+" por cajón)");
+    if(kg) h+=fila("Costo por kilo",$$(monto/kg));
+  } else {
+    const det=(panel.det||[]).filter(d=>d.monto>0);
+    if(det.length){
+      const sumaDet=det.reduce((a,d)=>a+d.monto,0);
+      if(!num(val("pm"))) document.getElementById("pm").value=sumaDet;
+      monto=num(val("pm"))||sumaDet;
+      h+=fila("Suma del detalle",$$(sumaDet));
+      if(Math.abs(monto-sumaDet)>1) h+='<p class="tiny" style="margin-top:4px;color:#b91c1c">El detalle no llega al total. Falta cargar algún renglón.</p>';
+    } else monto=num(val("pm"));
+    h+=fila("Total del pedido",$$(monto),true);
+  }
+  const previa=deudaProv(pr) - (panel.edit ? (datos.pedidos.find(x=>x.id===panel.edit)||{monto:0}).monto : 0);
+  const nuevoS=previa+monto;
+  h+=fila("Deuda antes",$$(previa))+fila("Deuda después",$$(nuevoS),true);
+  const inf=num(val("pi"));
+  if(inf){
+    const d=inf-nuevoS;
+    h+=fila("Saldo informado",$$(inf))+fila("Diferencia",$$(d));
+    if(Math.abs(d)>1) h+='<p class="tiny" style="margin-top:6px;color:#b91c1c">No coincide. Puede faltar cargar un pedido o un pago.</p>';
+    else h+='<p class="tiny ok" style="margin-top:6px">Coincide con el proveedor.</p>';
+  }
+  document.getElementById("resPed").innerHTML=h;
+}
+function guardarPedido(){
+  const pr=datos.proveedores.find(x=>x.id===panel.prov);
+  const esPollo = pr.nombre.toLowerCase().indexOf("pollo")>=0;
+  const m=num(val("pm"));
+  if(m<=0) return notificar(esPollo?"Poné los cajones y el importe por cajón.":"Poné el total del pedido.");
+  const reg={id:panel.edit||uid8(),fecha:val("pf"),provId:panel.prov,monto:m,informado:num(val("pi"))||null};
+  if(esPollo){ reg.cajones=num(val("pc")); reg.unitario=num(val("pu")); reg.kg=reg.cajones*datos.kgCajon; }
+  else { const d=(panel.det||[]).filter(x=>x.monto>0||x.cant>0); if(d.length) reg.detalle=d; }
+  const lista = panel.edit ? datos.pedidos.map(x=>x.id===panel.edit?reg:x) : [...datos.pedidos,reg];
+  panel.det=null;
+  guardar({...datos,pedidos:lista});
+  listo(panel.edit?"Pedido modificado.":"Pedido registrado.");
+}
+
+function guardarKg(){
+  const k=num(val("kgc"));
+  if(k<=0) return notificar("Poné un número mayor a cero.");
+  guardar({...datos,kgCajon:k});
+  notificar("Ahora se calcula con "+fmt(k)+" kg por cajón.");
+}
+function bajarCopia(){
+  const j=JSON.stringify(datos,null,1);
+  const a=document.createElement("a");
+  a.href="data:application/json;charset=utf-8,"+encodeURIComponent(j);
+  a.download="copia-granja-"+hoy()+".json";
+  a.click();
+  notificar("Copia descargada. Guardala en un lugar seguro.");
+}
+function pedirArchivo(){ document.getElementById("archivo").click(); }
+function leerCopia(input){
+  const f=input.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    let d;
+    try { d=JSON.parse(r.result); } catch(e){ return notificar("Ese archivo no es una copia válida."); }
+    if(!d.inicio||!d.cierres) return notificar("Ese archivo no parece una copia de esta app.");
+    const resumen="Vas a reemplazar TODO lo que tenés hoy por la copia del archivo.\n\n"+
+      "La copia trae:\n"+d.cierres.length+" días cerrados\n"+(d.gastos||[]).length+" gastos\n"+
+      (d.empleados||[]).length+" empleados\n\nEsto no se puede deshacer. ¿Seguimos?";
+    if(!confirm(resumen)) return;
+    guardar(completar(d));
+    panel=null;
+    notificar("Copia restaurada.");
+  };
+  r.readAsText(f);
+}
+
+/* ---------- venta semanal por producto ---------- */
+function vSemana(){
+  const f = panel.fecha || hoy();
+  panel.fecha = f;
+  const ex = datos.ventas.find(v=>v.fecha===f);
+  const prods = datos.productos.filter(x=>x.activo);
+  let h='<div class="card"><div class="mb"><label><span>Semana terminada el</span>'+
+    '<input type="date" id="sf" value="'+f+'" onchange="panel.fecha=this.value;render()"></label></div>'+
+    (ex?'<p class="muted mb">Esta semana ya estaba cargada. Si guardás, la reemplazás.</p>':'')+
+    '<p class="tiny mb">Poné las unidades vendidas de cada producto. Los que dejes vacíos quedan en cero.</p>';
+  prods.forEach(pd=>{
+    const v = ex ? (ex.items.find(i=>i.prodId===pd.id)||{}).cant : "";
+    h+='<div class="detfila2"><span>'+esc(pd.n)+'</span>'+
+       '<input id="sv_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(v||"")+'">'+
+       '<span class="tiny">'+pd.u+'</span></div>';
+  });
+  h+='</div><button class="btn" onclick="guardarSemana()">Guardar semana</button>';
+  if(ex) h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarSemana(\''+f+'\')">Borrar esta semana</button></p>';
+  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'informe\')">Ver informe de productos</button></p>';
+  return h;
+}
+function guardarSemana(){
+  const f=val("sf");
+  const items=datos.productos.filter(x=>x.activo)
+    .map(pd=>({prodId:pd.id,cant:num(val("sv_"+pd.id))})).filter(i=>i.cant>0);
+  if(!items.length) return notificar("No cargaste ninguna cantidad.");
+  const reg={id:uid8(),fecha:f,items};
+  guardar({...datos,ventas:[...datos.ventas.filter(v=>v.fecha!==f),reg]});
+  listo("Semana guardada.");
+}
+function borrarSemana(f){ guardar({...datos,ventas:datos.ventas.filter(v=>v.fecha!==f)}); notificar("Semana borrada."); }
+
+/* ---------- informe de productos ---------- */
+function vInforme(){
+  const d1 = panel.desde || (ym(hoy())+"-01");
+  const d2 = panel.hasta || hoy();
+  panel.desde=d1; panel.hasta=d2;
+  const en = f => f>=d1 && f<=d2;
+
+  const peds=datos.pedidos.filter(x=>en(x.fecha));
+  const provPollo=datos.proveedores.find(pr=>pr.nombre.toLowerCase().indexOf("pollo")>=0);
+  const pollo=peds.filter(x=>provPollo&&x.provId===provPollo.id);
+  const kgPollo=pollo.reduce((a,x)=>a+(x.kg||0),0);
+  const plataPollo=pollo.reduce((a,x)=>a+x.monto,0);
+  const cajones=pollo.reduce((a,x)=>a+(x.cajones||0),0);
+
+  const comp={}, gast={};
+  peds.forEach(x=>(x.detalle||[]).forEach(dd=>{
+    comp[dd.prodId]=comp[dd.prodId]||{cant:0,monto:0};
+    comp[dd.prodId].cant+=dd.cant||0; comp[dd.prodId].monto+=dd.monto||0;
+  }));
+  const vend={};
+  datos.ventas.filter(v=>en(v.fecha)).forEach(v=>v.items.forEach(i=>{ vend[i.prodId]=(vend[i.prodId]||0)+i.cant; }));
+
+  let h='<div class="card"><div class="row">'+
+    '<label><span>Desde</span><input type="date" value="'+d1+'" onchange="panel.desde=this.value;render()"></label>'+
+    '<label><span>Hasta</span><input type="date" value="'+d2+'" onchange="panel.hasta=this.value;render()"></label></div></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Pollo</h3><div class="resumen">'+
+    fila("Cajones comprados",fmt(cajones))+
+    fila("Kilos estimados",fmt(kgPollo)+" kg")+
+    fila("Plata gastada",$$(plataPollo))+
+    (kgPollo?fila("Costo por kilo",$$(plataPollo/kgPollo),true):"")+
+    '</div><p class="tiny" style="margin-top:8px">Calculado con '+fmt(datos.kgCajon)+' kg por cajón. Se cambia en Historial y ajustes.</p></div>';
+
+  const filas=datos.productos.filter(pd=>comp[pd.id]||vend[pd.id]);
+  h+='<div class="card"><h3 style="margin-bottom:8px">Congelados</h3>';
+  if(!filas.length) h+='<p class="muted">Todavía no cargaste compras ni ventas por producto.</p>';
+  else h+=filas.map(pd=>{
+    const c=comp[pd.id]||{cant:0,monto:0}, v=vend[pd.id]||0;
+    const costoU = c.cant ? c.monto/c.cant : 0;
+    return '<div class="item"><div class="txt"><p>'+esc(pd.n)+'</p><p class="tiny">'+
+      'compré '+fmt(c.cant)+' '+pd.u+' · vendí '+fmt(v)+' '+pd.u+
+      (costoU?' · costo '+$$(costoU)+'/'+pd.u:'')+'</p></div>'+
+      '<div class="der"><span>'+$$(c.monto)+'</span></div></div>';
+  }).join("");
+  h+='</div>';
+  h+='<button class="btn2" onclick="abrir(\'semana\')">Cargar venta de la semana</button>';
+  return h;
 }
 
 /* ---------- historial y ajustes ---------- */
@@ -774,6 +1006,18 @@ function vAjustes(){
       '</span><button class="del" onclick="borrarCierre(\''+c.fecha+'\')">Borrar</button></div></div>').join("")+'</div>';
   });
   if(!ord.length) h+='<div class="card"><p class="muted">Todavía no cargaste ningún día.</p></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Kilos por cajón de pollo</h3>'+
+    '<p class="muted" style="margin-bottom:12px">Se usa para estimar los kilos y el costo por kilo. Hoy: '+fmt(datos.kgCajon)+' kg.</p>'+
+    '<div class="row"><label><span>Nuevo valor</span><input id="kgc" inputmode="decimal" placeholder="'+fmt(datos.kgCajon)+'"></label>'+
+    '<button class="btn2" onclick="guardarKg()">Guardar</button></div></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Copia de seguridad</h3>'+
+    '<p class="muted" style="margin-bottom:12px">Bajá un archivo con todo lo cargado y guardalo en tu computadora o mandátelo por mail. Si algún día se pierde algo, lo restaurás desde ahí.</p>'+
+    '<div class="row"><button class="btn2" onclick="bajarCopia()">Descargar copia</button>'+
+    '<button class="btn2" onclick="pedirArchivo()">Restaurar copia</button></div>'+
+    '<input type="file" id="archivo" accept="application/json,.json" style="display:none" onchange="leerCopia(this)">'+
+    '</div>';
 
   h+='<div class="card"><h3 style="margin-bottom:8px">Arranque</h3><p class="muted">'+fec(datos.inicio.fecha)+
     ': caja chica '+$$(datos.inicio.cajaChica)+', efectivo '+$$(datos.inicio.cajaGrande)+', banco '+$$(datos.inicio.banco)+'.</p></div>';
@@ -858,8 +1102,13 @@ function armarResumen(){
   L.push("","LIQUIDACIONES");
   if(!ls.length) L.push("Ninguna.");
   ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria")));
+  const retP=datos.gastos.filter(g=>g.categoria===CAT_RETIRO&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
+  L.push("","RETIROS DE SOCIOS EN EL PERÍODO: "+$$(retP));
+  L.push("","DEUDA CON PROVEEDORES AL DÍA DE HOY");
+  datos.proveedores.forEach(pr=>L.push(pr.nombre+": "+$$(deudaProv(pr))));
+  L.push("Total: "+$$(deudaTotal()));
   L.push("","SALDOS AL DÍA DE HOY","Caja chica: "+$$(s.cajaChica),"Efectivo: "+$$(s.cajaGrande),
-    "Banco: "+$$(s.banco),"Total disponible: "+$$(s.total));
+    "Banco: "+$$(s.banco),"Total disponible: "+$$(s.total),"Libre después de pagar proveedores: "+$$(s.total-deudaTotal()));
   panel.txt=L.join("\n");
   render();
 }
