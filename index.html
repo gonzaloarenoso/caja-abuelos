@@ -346,7 +346,8 @@ function completar(d){
   return d;
 }
 function deudaProv(pr){
-  const ped=datos.pedidos.filter(x=>x.provId===pr.id).reduce((a,x)=>a+x.monto,0);
+  const ini=pr.saldoIni||0;
+  const ped=ini+datos.pedidos.filter(x=>x.provId===pr.id).reduce((a,x)=>a+x.monto,0);
   const pag=datos.gastos.filter(g=>g.categoria===pr.nombre).reduce((a,g)=>a+g.monto,0);
   return ped-pag;
 }
@@ -882,6 +883,11 @@ function guardarPedido(){
   listo(panel.edit?"Pedido modificado.":"Pedido registrado.");
 }
 
+function guardarSaldosIni(){
+  const provs=datos.proveedores.map(pr=>({...pr,saldoIni:num(val("si_"+pr.id))}));
+  guardar({...datos,proveedores:provs});
+  notificar("Deuda inicial guardada.");
+}
 function guardarKg(){
   const k=num(val("kgc"));
   if(k<=0) return notificar("Poné un número mayor a cero.");
@@ -1102,6 +1108,12 @@ function vAjustes(){
   });
   if(!ord.length) h+='<div class="card"><p class="muted">Todavía no cargaste ningún día.</p></div>';
 
+  h+='<div class="card"><h3 style="margin-bottom:8px">Deuda que ya tenías con cada proveedor</h3>'+
+    '<p class="muted" style="margin-bottom:12px">Lo que debías antes de empezar a usar la app. Se suma a los pedidos que cargues de acá en adelante.</p>'+
+    datos.proveedores.map(pr=>'<div class="detfila2"><span>'+esc(pr.nombre)+'</span>'+
+      '<input id="si_'+pr.id+'" inputmode="decimal" placeholder="0" value="'+(pr.saldoIni||"")+'"><span></span></div>').join("")+
+    '<button class="btn2" style="margin-top:8px" onclick="guardarSaldosIni()">Guardar</button></div>';
+
   h+='<div class="card"><h3 style="margin-bottom:8px">Kilos por cajón de pollo</h3>'+
     '<p class="muted" style="margin-bottom:12px">Se usa para estimar los kilos y el costo por kilo. Hoy: '+fmt(datos.kgCajon)+' kg.</p>'+
     '<div class="row"><label><span>Nuevo valor</span><input id="kgc" inputmode="decimal" placeholder="'+fmt(datos.kgCajon)+'"></label>'+
@@ -1200,7 +1212,7 @@ function armarResumen(){
   const retP=datos.gastos.filter(g=>g.categoria===CAT_RETIRO&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
   L.push("","RETIROS DE SOCIOS EN EL PERÍODO: "+$$(retP));
   L.push("","DEUDA CON PROVEEDORES AL DÍA DE HOY");
-  datos.proveedores.forEach(pr=>L.push(pr.nombre+": "+$$(deudaProv(pr))));
+  datos.proveedores.forEach(pr=>L.push(pr.nombre+": "+$$(deudaProv(pr))+(pr.saldoIni?" (incluye "+$$(pr.saldoIni)+" de deuda anterior)":"")));
   L.push("Total: "+$$(deudaTotal()));
   L.push("","SALDOS AL DÍA DE HOY","Caja chica: "+$$(s.cajaChica),"Efectivo: "+$$(s.cajaGrande),
     "Banco: "+$$(s.banco),"Total disponible: "+$$(s.total),"Libre después de pagar proveedores: "+$$(s.total-deudaTotal()));
