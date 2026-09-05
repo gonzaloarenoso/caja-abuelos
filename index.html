@@ -496,6 +496,7 @@ function vInicio(){
   const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
   const prom=dm.length?ventas/dm.length:0;
   const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const falt=dm.reduce((a,c)=>a+(c.faltante||0),0);
   const delMesG=datos.gastos.filter(g=>ym(g.fecha)===m);
   const delMesL=datos.liquidaciones.filter(l=>ym(l.fecha)===m);
   const delMesA=datos.consumos.filter(c=>c.tipo==="adelanto"&&ym(c.fecha)===m);
@@ -541,7 +542,8 @@ function vInicio(){
      fila("Promedio diario",oc(prom))+
      fila("Gastos en efectivo",oc(efe))+
      fila("Gastos de cuenta bancaria",oc(ban))+
-     fila("Gastos chicos del cajón",oc(chicos))+
+     fila("Salió del cajón",oc(chicos))+
+     (falt?fila("Faltantes del mes",oc(falt)):"")+
      (ret?fila("Retiros de socios",oc(ret)):"")+'</div>';
   if(dm.length && verMontos) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
      (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
@@ -599,6 +601,7 @@ function vCierre(){
    '<div class="row"><label><span>Retiré del cajón</span><div style="padding:9px 11px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:6px;font-size:16px">'+$$(retirosDe(f))+
    '</div><button class="link" style="margin-top:4px" onclick="panel={tipo:\'retiro\',fecha:\''+f+'\'};render()">Cargar un retiro</button></label>'+
    '<label><span>Quedó en caja</span><input id="cq" inputmode="decimal" value="'+v("quedo")+'" oninput="recalcCierre()"></label></div>'+
+   '<div class="mb"><label><span>De lo que salió del cajón, gastos conocidos</span><input id="cg" inputmode="decimal" placeholder="0" value="'+v("gastosConocidos")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="mb"><label><span>Saldo real del banco</span><input id="cb" inputmode="decimal" value="'+v("banco")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="resumen" id="resCierre"></div><p id="errCierre"></p></div>'+
    '<button class="btn" onclick="guardarCierre()">'+(e?"Actualizar día":"Guardar día")+'</button>';
@@ -616,7 +619,8 @@ function datosCierre(){
   const f=panel.fecha, p=previos(f);
   const e=num(val("ce")), po=num(val("cp")), r=retirosDe(f), q=num(val("cq")), b=num(val("cb"));
   const chicos=p.cajaChica+e-r-q, esperado=p.banco+po+movBanco(f);
-  return {f,e,po,r,q,b,chicos,dif:b-esperado};
+  const conocidos=num(val("cg")), faltante=chicos-conocidos;
+  return {f,e,po,r,q,b,chicos,conocidos,faltante,dif:b-esperado};
 }
 function recalcCierre(){
   try{ recalcCierre_(); }catch(e){}
@@ -624,14 +628,18 @@ function recalcCierre(){
 function recalcCierre_(){
   const d=datosCierre();
   document.getElementById("resCierre").innerHTML =
-    fila("Venta del día",$$(d.e+d.po),true)+fila("Gastos chicos del día",$$(d.chicos))+fila("Sin acreditar o comisiones",$$(d.dif));
+    fila("Venta del día",$$(d.e+d.po),true)+
+    fila("Salió del cajón",$$(d.chicos))+
+    (d.conocidos?fila("Gastos conocidos",$$(d.conocidos)):"")+
+    (d.conocidos?fila(d.faltante>=0?"Faltante":"Sobrante",$$(Math.abs(d.faltante)),true):"")+
+    fila("Sin acreditar o comisiones",$$(d.dif));
   document.getElementById("errCierre").innerHTML =
     d.chicos<0 ? '<span class="error">Los gastos chicos dan negativo. Revisá el conteo o el retiro.</span>' : "";
 }
 function guardarCierre(){
   if(val("ce")===""||val("cq")===""||val("cb")==="") return notificar("Faltan el efectivo cobrado, lo que quedó en caja y el saldo del banco.");
   const d=datosCierre();
-  const reg={fecha:d.f,efectivo:d.e,posnet:d.po,retiro:retirosDe(d.f),quedo:d.q,banco:d.b,gastosChicos:d.chicos,difBanco:d.dif};
+  const reg={fecha:d.f,efectivo:d.e,posnet:d.po,retiro:retirosDe(d.f),quedo:d.q,banco:d.b,gastosChicos:d.chicos,gastosConocidos:d.conocidos,faltante:d.conocidos?d.faltante:0,difBanco:d.dif};
   const existia=datos.cierres.some(c=>c.fecha===d.f);
   guardar({...datos,cierres:[...datos.cierres.filter(c=>c.fecha!==d.f),reg]});
   listo(existia?"Día actualizado.":"Día guardado.");
@@ -1261,10 +1269,10 @@ function armarResumen(){
     Object.entries(pd).sort((a,b)=>b[1].t/b[1].n-a[1].t/a[1].n).forEach(([k,v])=>L.push(k+": "+$$(v.t/v.n)+" ("+v.n+" días)"));
     L.push("");
   }
-  L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; retiro; quedó; gastos chicos; saldo banco; sin acreditar)");
+  L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; retiro; quedó; salió del cajón; faltante; saldo banco; sin acreditar)");
   cs.forEach(c=>L.push(c.hist
-    ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","planilla anterior"].join("; ")
-    : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.banco,c.difBanco].join("; ")));
+    ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","-","planilla anterior"].join("; ")
+    : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.faltante||0,c.banco,c.difBanco].join("; ")));
   L.push("","GASTOS CHICOS PAGADOS DEL CAJÓN: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y CUENTA BANCARIA");
   if(!gs.length) L.push("Ninguno.");
   Object.entries(pc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>L.push(k+": "+$$(v)));
