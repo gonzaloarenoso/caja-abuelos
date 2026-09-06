@@ -223,8 +223,9 @@ const HISTORICO = [
 const HIST_DESDE = HISTORICO.length ? HISTORICO[0].f : "";
 const HIST_HASTA = HISTORICO.length ? HISTORICO[HISTORICO.length-1].f : "";
 
-const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro de socio","Otros"];
+const CATEGORIAS = ["Pollo","Congelados","Alquiler","Cargas sociales","Impuestos","Servicios","Verdura","Retiro de socio","Retiro en especie","Otros"];
 const CAT_RETIRO = "Retiro de socio";
+const CAT_ESPECIE = "Retiro en especie";
 const KG_CAJON_DEF = 17;
 const PRODUCTOS_BASE = [
 {id:"pd01",n:"Papas Noisettes",u:"kg",activo:true},
@@ -501,12 +502,14 @@ function vInicio(){
   const delMesL=datos.liquidaciones.filter(l=>ym(l.fecha)===m);
   const delMesA=datos.consumos.filter(c=>c.tipo==="adelanto"&&ym(c.fecha)===m);
   const sum=(arr,campo,orig)=>arr.filter(x=>x.origen===orig).reduce((a,x)=>a+x[campo],0);
-  const gOper=delMesG.filter(g=>g.categoria!==CAT_RETIRO);
+  const gOper=delMesG.filter(g=>g.categoria!==CAT_RETIRO&&g.categoria!==CAT_ESPECIE);
   const gRet=delMesG.filter(g=>g.categoria===CAT_RETIRO);
+  const gEsp=delMesG.filter(g=>g.categoria===CAT_ESPECIE);
   const pedPag=datos.pedidos.filter(x=>x.pagado&&ym(x.fecha)===m);
   const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo") + pedPag.reduce((a,x)=>a+pagoDe(x).efe,0);
   const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco") + pedPag.reduce((a,x)=>a+pagoDe(x).ban,0);
   const ret = gRet.reduce((a,g)=>a+g.monto,0);
+  const esp = gEsp.reduce((a,g)=>a+g.monto,0);
   const deuda = deudaTotal();
   const cargado=datos.cierres.some(c=>c.fecha===hoy());
   const act=datos.empleados.filter(e=>e.activo);
@@ -544,7 +547,8 @@ function vInicio(){
      fila("Gastos de cuenta bancaria",oc(ban))+
      fila("Salió del cajón",oc(chicos))+
      (falt?fila("Faltantes del mes",oc(falt)):"")+
-     (ret?fila("Retiros de socios",oc(ret)):"")+'</div>';
+     (ret?fila("Retiros de socios",oc(ret)):"")+
+     (esp?fila("Retiros en especie",oc(esp)):"")+'</div>';
   if(dm.length && verMontos) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
      (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
                        : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
@@ -654,7 +658,8 @@ function vGasto(){
    '<label><span>Categoría</span><select id="gc">'+CATEGORIAS.map(cat).join("")+'</select></label></div>'+
    '<div class="row"><label><span>Importe</span><input id="gm" inputmode="decimal" placeholder="0" value="'+(g?g.monto:"")+'"></label>'+
    '<label><span>Salió de</span><select id="go"><option value="efectivo"'+(g&&g.origen==="efectivo"?' selected':'')+'>Efectivo</option>'+
-   '<option value="banco"'+(g&&g.origen==="banco"?' selected':'')+'>Banco</option></select></label></div>'+
+   '<option value="banco"'+(g&&g.origen==="banco"?' selected':'')+'>Banco</option>'+
+   '<option value="especie"'+(g&&g.origen==="especie"?' selected':'')+'>No salió plata (mercadería)</option></select></label></div>'+
    '<div class="mb"><label><span>Detalle (opcional)</span><input id="gn" value="'+esc(g?g.nota:"")+'"></label></div></div>'+
    '<button class="btn" onclick="guardarGasto()">'+(g?"Guardar cambios":"Registrar gasto")+'</button>'+
    (g?'<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarMov(\'gastos\',\''+g.id+'\');volver()">Borrar este gasto</button></p>':"");
@@ -1304,7 +1309,9 @@ function armarResumen(){
   if(!ls.length) L.push("Ninguna.");
   ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria")));
   const retP=datos.gastos.filter(g=>g.categoria===CAT_RETIRO&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
+  const espP=datos.gastos.filter(g=>g.categoria===CAT_ESPECIE&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
   L.push("","RETIROS DE SOCIOS EN EL PERÍODO: "+$$(retP));
+  L.push("RETIROS EN ESPECIE (mercadería, no movió plata): "+$$(espP));
   L.push("","DEUDA CON PROVEEDORES AL DÍA DE HOY");
   datos.proveedores.forEach(pr=>L.push(pr.nombre+": "+$$(deudaProv(pr))+(pr.saldoIni?" (incluye "+$$(pr.saldoIni)+" de deuda anterior)":"")));
   L.push("Total: "+$$(deudaTotal()));
