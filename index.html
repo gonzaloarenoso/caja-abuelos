@@ -1349,6 +1349,13 @@ function armarResumen(){
   const s=calcular(datos);
   const ef=cs.reduce((a,c)=>a+c.efectivo,0), po=cs.reduce((a,c)=>a+c.posnet,0);
   const chicos=cs.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const provPollo=datos.proveedores.find(pr=>pr.nombre.toLowerCase().indexOf("pollo")>=0);
+  const peds=datos.pedidos.filter(x=>en(x.fecha));
+  const pollo=peds.filter(x=>provPollo&&x.provId===provPollo.id);
+  const kgPollo=pollo.reduce((a,x)=>a+(x.kg||0),0);
+  const plataPollo=pollo.reduce((a,x)=>a+(x.monto-(x.otros||0)),0);
+  const plataOtros=pollo.reduce((a,x)=>a+(x.otros||0),0);
+  const cajones=pollo.reduce((a,x)=>a+(x.cajones||0),0);
   const dias=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"], pd={};
   cs.forEach(c=>{ const p=c.fecha.split("-").map(Number); const n=dias[new Date(p[0],p[1]-1,p[2]).getDay()];
     pd[n]=pd[n]||{t:0,n:0}; pd[n].t+=c.efectivo+c.posnet; pd[n].n++; });
@@ -1386,6 +1393,46 @@ function armarResumen(){
     L.push("Detalle (fecha; pollo; congelados; otros; sueldos; cargas sociales):");
     hs.forEach(r=>{ if(r.po||r.co||r.ot||r.su||r.cs) L.push([r.fecha,r.po,r.co,r.ot,r.su,r.cs].join("; ")); });
   }
+  /* ---- productos y kilos ---- */
+  const semR=datos.ventas.filter(v=>!(v.hasta<d1||v.desde>d2));
+  const vendR={}; semR.forEach(v=>v.items.forEach(i=>{ vendR[i.prodId]=(vendR[i.prodId]||0)+i.cant; }));
+  const compR={}; peds.forEach(x=>(x.detalle||[]).forEach(dd=>{
+    compR[dd.prodId]=compR[dd.prodId]||{cant:0,monto:0};
+    compR[dd.prodId].cant+=dd.cant||0; compR[dd.prodId].monto+=dd.monto||0; }));
+
+  L.push("","POLLO COMPRADO");
+  L.push("Cajones: "+fmt(cajones)+" | kilos estimados: "+fmt(kgPollo)+" kg ("+fmt(datos.kgCajon)+" kg por cajón)");
+  L.push("Plata en pollo: "+$$(plataPollo)+(plataOtros?" | otros productos del proveedor: "+$$(plataOtros):""));
+  if(kgPollo) L.push("Costo por kilo: "+$$(plataPollo/kgPollo));
+
+  if(semR.length){
+    L.push("","VENTA POR PRODUCTO");
+    L.push("Semanas incluidas: "+semR.map(v=>fec(v.desde)+" al "+fec(v.hasta)).join(", "));
+    const conKg=(t)=>datos.productos.filter(pd=>pd.tipo===t&&(vendR[pd.id]||compR[pd.id]));
+    const bloque=(t,titulo)=>{
+      const f=conKg(t); if(!f.length) return;
+      L.push("");
+      L.push(titulo+" (producto; vendido; comprado; importe comprado; costo unitario)");
+      let tk=0;
+      f.forEach(pd=>{
+        const c=compR[pd.id]||{cant:0,monto:0}, v=vendR[pd.id]||0;
+        if(pd.u==="kg") tk+=v;
+        L.push(pd.n+"; "+fmt(v)+" "+pd.u+"; "+fmt(c.cant)+" "+pd.u+"; "+$$(c.monto)+"; "+(c.cant?$$(c.monto/c.cant):"-"));
+      });
+      L.push("Total vendido en kilos: "+fmt(tk)+" kg");
+      return tk;
+    };
+    const kgProp=bloque("propio","PRODUCTOS PROPIOS (salen del pollo)")||0;
+    bloque("congelado","CONGELADOS COMPRADOS");
+    if(kgPollo&&kgProp){
+      L.push("");
+      L.push("RENDIMIENTO: "+fmt(kgProp)+" kg propios vendidos sobre "+fmt(kgPollo)+" kg de cajón = "+(kgProp/kgPollo*100).toFixed(1)+"%");
+      L.push("Venta por kilo de cajón comprado: "+$$((ef+po)/kgPollo));
+    }
+  } else {
+    L.push("","VENTA POR PRODUCTO: no hay semanas cargadas en este período.");
+  }
+
   L.push("","TRASPASOS");
   if(!ts.length) L.push("Ninguno.");
   ts.forEach(t=>L.push(t.fecha+"; "+(t.sentido==="be"?"banco a efectivo":"efectivo a banco")+"; "+t.monto+"; comisión "+(t.comision||0)));
