@@ -1150,7 +1150,10 @@ function agregarProductos(){
   const limpios=nuevos.filter(x=>yaHay.indexOf(x.n.toLowerCase())<0);
   if(!limpios.length) return notificar("Esos productos ya estaban en la lista.");
   guardar({...datos,productos:[...datos.productos,...limpios]});
-  notificar(limpios.length+(limpios.length===1?" producto agregado.":" productos agregados.")+(limpios.length<nuevos.length?" ("+(nuevos.length-limpios.length)+" ya existían)":""));
+  const sospecha=limpios.filter(x=>x.u==="kg"&&/burger|medall|hamburg/i.test(x.n));
+  notificar(limpios.length+(limpios.length===1?" producto agregado.":" productos agregados.")+
+    (limpios.length<nuevos.length?" ("+(nuevos.length-limpios.length)+" ya existían)":"")+
+    (sospecha.length?" Ojo: cargué "+sospecha.length+" por kilo; si van por unidad, quitalos y agregalos con (un).":""));
 }
 function bajaProducto(id){
   guardar({...datos,productos:datos.productos.map(x=>x.id===id?{...x,activo:false}:x)});
@@ -1255,6 +1258,17 @@ function vInforme(){
       '<div class="der"><span>'+$$(c.monto)+'</span></div></div>';
   }).join("");
   h+='</div>';
+  const kgProp=datos.productos.filter(x=>x.tipo==="propio"&&x.u==="kg")
+    .reduce((a,x)=>a+(vend[x.id]||0),0);
+  if(kgProp&&kgPollo){
+    const r=kgProp/kgPollo*100;
+    h+='<div class="card"><h3 style="margin-bottom:8px">Rendimiento</h3><div class="resumen">'+
+      fila("Kilos propios vendidos",fmt(kgProp)+" kg")+
+      fila("Kilos de cajón comprados",fmt(kgPollo)+" kg")+
+      fila("Rendimiento",r.toFixed(1)+"%",true)+'</div>'+
+      (r>100?'<p class="tiny" style="margin-top:8px;color:#b91c1c">No puede pasar de 100%. Faltan cargar pedidos de pollo: para esos kilos harían falta unos '+fmt(Math.ceil(kgProp/datos.kgCajon))+' cajones y cargaste '+fmt(cajones)+'.</p>':'')+
+      '</div>';
+  }
   h+='<button class="btn2" onclick="abrir(\'semana\')">Cargar venta de la semana</button>';
   return h;
 }
@@ -1416,7 +1430,7 @@ function armarResumen(){
       let tk=0;
       f.forEach(pd=>{
         const c=compR[pd.id]||{cant:0,monto:0}, v=vendR[pd.id]||0;
-        if(pd.u==="kg") tk+=v;
+        if(pd.u==="kg") tk+=v;   /* las unidades no suman kilos */
         L.push(pd.n+"; "+fmt(v)+" "+pd.u+"; "+fmt(c.cant)+" "+pd.u+"; "+$$(c.monto)+"; "+(c.cant?$$(c.monto/c.cant):"-"));
       });
       L.push("Total vendido en kilos: "+fmt(tk)+" kg");
@@ -1426,8 +1440,14 @@ function armarResumen(){
     bloque("congelado","CONGELADOS COMPRADOS");
     if(kgPollo&&kgProp){
       L.push("");
-      L.push("RENDIMIENTO: "+fmt(kgProp)+" kg propios vendidos sobre "+fmt(kgPollo)+" kg de cajón = "+(kgProp/kgPollo*100).toFixed(1)+"%");
-      L.push("Venta por kilo de cajón comprado: "+$$((ef+po)/kgPollo));
+      const rend=kgProp/kgPollo*100;
+      L.push("RENDIMIENTO: "+fmt(kgProp)+" kg propios vendidos sobre "+fmt(kgPollo)+" kg de cajón = "+rend.toFixed(1)+"%");
+      if(rend>100){
+        L.push("OJO: no puede superar el 100%. Faltan cargar pedidos de pollo en este período.");
+        L.push("Para vender "+fmt(kgProp)+" kg harían falta unos "+fmt(Math.ceil(kgProp/datos.kgCajon))+" cajones y cargaste "+fmt(cajones)+".");
+      } else {
+        L.push("Venta por kilo de cajón comprado: "+$$((ef+po)/kgPollo));
+      }
     }
   } else {
     L.push("","VENTA POR PRODUCTO: no hay semanas cargadas en este período.");
