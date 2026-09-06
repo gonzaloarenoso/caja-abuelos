@@ -281,6 +281,16 @@ const oc = v => verMontos ? $$(v) : '<span class="oculto">••••••</sp
 /* ---------- utilidades ---------- */
 const hoy = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const num = s => { if(typeof s==="number") return s; if(!s) return 0; const n=parseFloat(String(s).replace(/[^\d,.-]/g,"").replace(/\./g,"").replace(",",".")); return isNaN(n)?0:n; };
+function cant(v){                       /* cantidades: 1,5 y 1.5 son lo mismo */
+  if(typeof v==="number") return v;
+  if(!v) return 0;
+  let t=String(v).replace(/[^\d.,-]/g,"");
+  const ic=t.lastIndexOf(","), ip=t.lastIndexOf(".");
+  const sep=Math.max(ic,ip);
+  if(sep>=0){ t=t.slice(0,sep).replace(/[.,]/g,"")+"."+t.slice(sep+1).replace(/[.,]/g,""); }
+  const n=parseFloat(t);
+  return isNaN(n)?0:n;
+}
 const fmt = n => (n||0).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:2});
 const $$ = n => "$ "+fmt(n);
 const fec = i => i ? i.slice(8,10)+"/"+i.slice(5,7) : "";
@@ -872,7 +882,7 @@ function vPedido(){
         '<select onchange="panel.det['+i+'].prodId=this.value">'+
         datos.productos.filter(x=>x.activo).map(x=>'<option value="'+x.id+'"'+(x.id===d.prodId?' selected':'')+'>'+esc(x.n)+'</option>').join("")+
         '</select>'+
-        '<input inputmode="decimal" placeholder="cant." value="'+(d.cant||"")+'" oninput="panel.det['+i+'].cant=num(this.value);recalcPedido()">'+
+        '<input inputmode="decimal" placeholder="cant." value="'+(d.cant||"")+'" oninput="panel.det['+i+'].cant=cant(this.value);recalcPedido()">'+
         '<input inputmode="decimal" placeholder="importe" value="'+(d.monto||"")+'" oninput="panel.det['+i+'].monto=num(this.value);recalcPedido()">'+
         '<button class="del" onclick="panel.det.splice('+i+',1);render()">&times;</button></div>';
     });
@@ -911,7 +921,7 @@ function recalcPedido_(){
   let monto;
   let h="";
   if(esPollo){
-    const caj=num(val("pc")), uni=num(val("pu")), otr=num(val("po"));
+    const caj=cant(val("pc")), uni=num(val("pu")), otr=num(val("po"));
     const solopollo=caj*uni;
     monto=solopollo+otr;
     const kg=caj*datos.kgCajon;
@@ -964,7 +974,7 @@ function guardarPedido(){
   const reg={id:panel.edit||uid8(),fecha:val("pf"),provId:panel.prov,monto:m,informado:num(val("pi"))||null,pagado:!!panel.pagado,pagEfe:panel.pagado?num(val("pge")):0,pagBan:panel.pagado?num(val("pgb")):0};
   if(panel.pagado && Math.abs(reg.pagEfe+reg.pagBan-m)>1)
     return notificar("Lo pagado en efectivo y por banco tiene que sumar "+$$(m)+".");
-  if(esPollo){ reg.cajones=num(val("pc")); reg.unitario=num(val("pu")); reg.kg=reg.cajones*datos.kgCajon; reg.otros=num(val("po"))||0; reg.otrosNota=val("pn"); }
+  if(esPollo){ reg.cajones=cant(val("pc")); reg.unitario=num(val("pu")); reg.kg=reg.cajones*datos.kgCajon; reg.otros=num(val("po"))||0; reg.otrosNota=val("pn"); }
   else { const d=(panel.det||[]).filter(x=>x.monto>0||x.cant>0); if(d.length) reg.detalle=d; }
   const lista = panel.edit ? datos.pedidos.map(x=>x.id===panel.edit?reg:x) : [...datos.pedidos,reg];
   panel.det=null; panel.pagado=undefined;
@@ -978,7 +988,7 @@ function guardarSaldosIni(){
   notificar("Deuda inicial guardada.");
 }
 function guardarKg(){
-  const k=num(val("kgc"));
+  const k=cant(val("kgc"));
   if(k<=0) return notificar("Poné un número mayor a cero.");
   guardar({...datos,kgCajon:k});
   notificar("Ahora se calcula con "+fmt(k)+" kg por cajón.");
@@ -1113,7 +1123,7 @@ function vProductos(){
   const act=datos.productos.filter(x=>x.activo);
   const cong=act.filter(x=>x.tipo!=="propio"), prop=act.filter(x=>x.tipo==="propio");
   let h='<div class="card"><h3 style="margin-bottom:8px">Agregar productos</h3>'+
-   '<p class="tiny" style="margin-bottom:10px">Uno por renglón. Si va por unidad en vez de kilo, escribí " (un)" al final del nombre.</p>'+
+   '<p class="tiny" style="margin-bottom:10px">Separalos por renglón o por coma. Si va por unidad en vez de kilo, escribí " (un)" al final del nombre.</p>'+
    '<div class="row"><label><span>Tipo</span><select id="ntipo">'+
    '<option value="propio">Propio: sale del pollo que compro</option>'+
    '<option value="congelado">Comprado: lo revendo tal cual</option></select></label>'+
@@ -1130,14 +1140,17 @@ function vProductos(){
 }
 function agregarProductos(){
   const t=val("ntipo");
-  const lineas=(document.getElementById("nlista").value||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const lineas=(document.getElementById("nlista").value||"").split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean);
   if(!lineas.length) return notificar("Escribí al menos un producto.");
   const nuevos=lineas.map(l=>{
     const un=/\(un\)$/i.test(l);
     return {id:uid8(), n:l.replace(/\s*\(un\)$/i,"").trim(), u:un?"un":"kg", tipo:t, activo:true};
   });
-  guardar({...datos,productos:[...datos.productos,...nuevos]});
-  notificar(nuevos.length+(nuevos.length===1?" producto agregado.":" productos agregados."));
+  const yaHay=datos.productos.filter(x=>x.activo).map(x=>x.n.toLowerCase());
+  const limpios=nuevos.filter(x=>yaHay.indexOf(x.n.toLowerCase())<0);
+  if(!limpios.length) return notificar("Esos productos ya estaban en la lista.");
+  guardar({...datos,productos:[...datos.productos,...limpios]});
+  notificar(limpios.length+(limpios.length===1?" producto agregado.":" productos agregados.")+(limpios.length<nuevos.length?" ("+(nuevos.length-limpios.length)+" ya existían)":""));
 }
 function bajaProducto(id){
   guardar({...datos,productos:datos.productos.map(x=>x.id===id?{...x,activo:false}:x)});
@@ -1183,7 +1196,7 @@ function vSemana(){
 function guardarSemana(){
   const sem=semanaDe(panel.desde);
   const items=datos.productos.filter(x=>x.activo)
-    .map(pd=>({prodId:pd.id,cant:num(val("sv_"+pd.id))})).filter(i=>i.cant>0);
+    .map(pd=>({prodId:pd.id,cant:cant(val("sv_"+pd.id))})).filter(i=>i.cant>0);
   if(!items.length) return notificar("No cargaste ninguna cantidad.");
   const reg={id:uid8(),desde:sem.desde,hasta:sem.hasta,fecha:sem.hasta,items};
   guardar({...datos,ventas:[...datos.ventas.filter(v=>v.desde!==sem.desde),reg]});
