@@ -288,6 +288,22 @@ const ym = i => (i||"").slice(0,7);
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const nombreMes = m => m ? MESES[parseInt(m.slice(5,7),10)-1]+" "+m.slice(0,4) : "";
 const uid8 = () => Math.random().toString(36).slice(2,10);
+const iso = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+function semanaDe(f){                    /* domingo a sábado */
+  const d=new Date(f+"T12:00:00");
+  const ini=new Date(d); ini.setDate(d.getDate()-d.getDay());
+  const fin=new Date(ini); fin.setDate(ini.getDate()+6);
+  return {desde:iso(ini), hasta:iso(fin)};
+}
+function semanasRecientes(n){
+  const out=[]; let base=semanaDe(hoy());
+  for(let i=0;i<n;i++){
+    out.push(base);
+    const d=new Date(base.desde+"T12:00:00"); d.setDate(d.getDate()-7);
+    base=semanaDe(iso(d));
+  }
+  return out;
+}
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const val = id => { const e=document.getElementById(id); return e?e.value:""; };
 const etiqueta = c => fec(c.fecha)+" · "+(c.tipo==="adelanto"?"adelanto":(c.nota||"mercadería"));
@@ -355,7 +371,14 @@ function completar(d){
     d.migRetiros=true;
   }
   if(!d.ventas) d.ventas=[];
+  d.ventas = d.ventas.map(v=>{
+    if(v.desde&&v.hasta) return v;
+    const h=v.fecha, dd=new Date(h+"T12:00:00"); dd.setDate(dd.getDate()-6);
+    const de=dd.getFullYear()+"-"+String(dd.getMonth()+1).padStart(2,"0")+"-"+String(dd.getDate()).padStart(2,"0");
+    return {...v,desde:de,hasta:h};
+  });
   if(!d.productos||!d.productos.length) d.productos=JSON.parse(JSON.stringify(PRODUCTOS_BASE));
+  d.productos = d.productos.map(x=> x.tipo ? x : {...x,tipo:"congelado"});
   if(!d.kgCajon) d.kgCajon=KG_CAJON_DEF;
   if(!d.inicio) d.inicio=INICIAL.inicio;
   d.gastos = d.gastos.map(g=> g.categoria==="Retiro del dueño" ? {...g,categoria:CAT_RETIRO} : g);
@@ -463,7 +486,7 @@ function render(){
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   let cuerpo;
   try { cuerpo = ({cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
   } catch(err){ mostrarError("al abrir "+panel.tipo+": "+err.message); cuerpo='<div class="card"><p class="muted">No se pudo abrir esta pantalla.</p></div>'; }
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
@@ -1085,37 +1108,88 @@ function anularLiq(id){
   notificar("Liquidación anulada. Los consumos vuelven a quedar pendientes.");
 }
 
+/* ---------- productos ---------- */
+function vProductos(){
+  const act=datos.productos.filter(x=>x.activo);
+  const cong=act.filter(x=>x.tipo!=="propio"), prop=act.filter(x=>x.tipo==="propio");
+  let h='<div class="card"><h3 style="margin-bottom:8px">Agregar productos</h3>'+
+   '<p class="tiny" style="margin-bottom:10px">Uno por renglón. Si va por unidad en vez de kilo, escribí " (un)" al final del nombre.</p>'+
+   '<div class="row"><label><span>Tipo</span><select id="ntipo">'+
+   '<option value="propio">Propio: sale del pollo que compro</option>'+
+   '<option value="congelado">Comprado: lo revendo tal cual</option></select></label>'+
+   '<label><span>&nbsp;</span><button class="btn2" onclick="agregarProductos()">Agregar</button></label></div>'+
+   '<textarea id="nlista" rows="5" placeholder="Milanesa de pechuga&#10;Pechuga&#10;Pata y muslo&#10;Medallon relleno (un)"></textarea></div>';
+
+  const lista=(t,nom)=>'<div class="card"><h3 style="margin-bottom:8px">'+nom+' ('+t.length+')</h3>'+
+    (t.length? t.map(x=>'<div class="item"><div class="txt"><p>'+esc(x.n)+'</p><p class="tiny">por '+(x.u==="kg"?"kilo":"unidad")+'</p></div>'+
+     '<div class="der"><button class="del" onclick="bajaProducto(\''+x.id+'\')">Quitar</button></div></div>').join("")
+     : '<p class="muted">Ninguno.</p>')+'</div>';
+  h+=lista(prop,"Productos propios (del pollo)");
+  h+=lista(cong,"Congelados comprados");
+  return h;
+}
+function agregarProductos(){
+  const t=val("ntipo");
+  const lineas=(document.getElementById("nlista").value||"").split("\n").map(x=>x.trim()).filter(Boolean);
+  if(!lineas.length) return notificar("Escribí al menos un producto.");
+  const nuevos=lineas.map(l=>{
+    const un=/\(un\)$/i.test(l);
+    return {id:uid8(), n:l.replace(/\s*\(un\)$/i,"").trim(), u:un?"un":"kg", tipo:t, activo:true};
+  });
+  guardar({...datos,productos:[...datos.productos,...nuevos]});
+  notificar(nuevos.length+(nuevos.length===1?" producto agregado.":" productos agregados."));
+}
+function bajaProducto(id){
+  guardar({...datos,productos:datos.productos.map(x=>x.id===id?{...x,activo:false}:x)});
+  notificar("Producto quitado de la lista.");
+}
+
 /* ---------- venta semanal por producto ---------- */
 function vSemana(){
-  const f = panel.fecha || hoy();
-  panel.fecha = f;
-  const ex = datos.ventas.find(v=>v.fecha===f);
+  const sems=semanasRecientes(8);
+  const actual = panel.desde || sems[1].desde;      /* por defecto, la semana pasada ya cerrada */
+  panel.desde = actual;
+  const sem = sems.find(x=>x.desde===actual) || semanaDe(actual);
+  const ex = datos.ventas.find(v=>v.desde===sem.desde);
   const prods = datos.productos.filter(x=>x.activo);
-  let h='<div class="card"><div class="mb"><label><span>Semana terminada el</span>'+
-    '<input type="date" id="sf" value="'+f+'" onchange="panel.fecha=this.value;render()"></label></div>'+
+  const propios = prods.filter(x=>x.tipo==="propio");
+  const comprados = prods.filter(x=>x.tipo!=="propio");
+
+  let h='<div class="card"><div class="mb"><label><span>Semana</span><select onchange="panel.desde=this.value;render()">'+
+    sems.map((x,i)=>'<option value="'+x.desde+'"'+(x.desde===sem.desde?' selected':'')+'>'+
+      fec(x.desde)+' al '+fec(x.hasta)+(i===0?' (en curso)':'')+'</option>').join("")+
+    '</select></label></div>'+
     (ex?'<p class="muted mb">Esta semana ya estaba cargada. Si guardás, la reemplazás.</p>':'')+
-    '<p class="tiny mb">Poné las unidades vendidas de cada producto. Los que dejes vacíos quedan en cero.</p>';
-  prods.forEach(pd=>{
-    const v = ex ? (ex.items.find(i=>i.prodId===pd.id)||{}).cant : "";
-    h+='<div class="detfila2"><span>'+esc(pd.n)+'</span>'+
-       '<input id="sv_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(v||"")+'">'+
-       '<span class="tiny">'+pd.u+'</span></div>';
-  });
-  h+='</div><button class="btn" onclick="guardarSemana()">Guardar semana</button>';
-  if(ex) h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarSemana(\''+f+'\')">Borrar esta semana</button></p>';
-  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'informe\')">Ver informe de productos</button></p>';
+    '<p class="tiny">Poné las unidades vendidas. Los que dejes vacíos quedan en cero.</p></div>';
+
+  const bloque=(t,nom)=> !t.length ? "" :
+    '<div class="card"><h3 style="margin-bottom:8px">'+nom+'</h3>'+
+    t.map(pd=>{
+      const v = ex ? (ex.items.find(i=>i.prodId===pd.id)||{}).cant : "";
+      return '<div class="detfila2"><span>'+esc(pd.n)+'</span>'+
+        '<input id="sv_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(v||"")+'">'+
+        '<span class="tiny">'+pd.u+'</span></div>';
+    }).join("")+'</div>';
+  h+=bloque(propios,"Productos propios");
+  h+=bloque(comprados,"Congelados comprados");
+  if(!prods.length) h+='<div class="card"><p class="muted">No hay productos cargados.</p></div>';
+
+  h+='<button class="btn" onclick="guardarSemana()">Guardar semana</button>';
+  if(ex) h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarSemana(\''+sem.desde+'\')">Borrar esta semana</button></p>';
+  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'productos\')">Administrar productos</button>'+
+     ' &nbsp;·&nbsp; <button class="link" onclick="abrir(\'informe\')">Ver informe</button></p>';
   return h;
 }
 function guardarSemana(){
-  const f=val("sf");
+  const sem=semanaDe(panel.desde);
   const items=datos.productos.filter(x=>x.activo)
     .map(pd=>({prodId:pd.id,cant:num(val("sv_"+pd.id))})).filter(i=>i.cant>0);
   if(!items.length) return notificar("No cargaste ninguna cantidad.");
-  const reg={id:uid8(),fecha:f,items};
-  guardar({...datos,ventas:[...datos.ventas.filter(v=>v.fecha!==f),reg]});
-  listo("Semana guardada.");
+  const reg={id:uid8(),desde:sem.desde,hasta:sem.hasta,fecha:sem.hasta,items};
+  guardar({...datos,ventas:[...datos.ventas.filter(v=>v.desde!==sem.desde),reg]});
+  listo("Semana del "+fec(sem.desde)+" al "+fec(sem.hasta)+" guardada.");
 }
-function borrarSemana(f){ guardar({...datos,ventas:datos.ventas.filter(v=>v.fecha!==f)}); notificar("Semana borrada."); }
+function borrarSemana(d){ guardar({...datos,ventas:datos.ventas.filter(v=>v.desde!==d)}); notificar("Semana borrada."); }
 
 /* ---------- informe de productos ---------- */
 function vInforme(){
@@ -1138,7 +1212,8 @@ function vInforme(){
     comp[dd.prodId].cant+=dd.cant||0; comp[dd.prodId].monto+=dd.monto||0;
   }));
   const vend={};
-  datos.ventas.filter(v=>en(v.fecha)).forEach(v=>v.items.forEach(i=>{ vend[i.prodId]=(vend[i.prodId]||0)+i.cant; }));
+  const semUsadas=datos.ventas.filter(v=>!(v.hasta<d1||v.desde>d2));
+  semUsadas.forEach(v=>v.items.forEach(i=>{ vend[i.prodId]=(vend[i.prodId]||0)+i.cant; }));
 
   let h='<div class="card"><div class="row">'+
     '<label><span>Desde</span><input type="date" value="'+d1+'" onchange="panel.desde=this.value;render()"></label>'+
@@ -1153,6 +1228,9 @@ function vInforme(){
     '</div><p class="tiny" style="margin-top:8px">Calculado con '+fmt(datos.kgCajon)+' kg por cajón. Se cambia en Historial y ajustes.</p></div>';
 
   const filas=datos.productos.filter(pd=>comp[pd.id]||vend[pd.id]);
+  if(semUsadas.length) h+='<div class="card"><h3 style="margin-bottom:6px">Semanas incluidas</h3>'+
+    semUsadas.map(v=>'<p class="tiny">'+fec(v.desde)+' al '+fec(v.hasta)+'</p>').join("")+'</div>';
+  else h+='<div class="card"><p class="muted">No hay ninguna semana cargada dentro de este período.</p></div>';
   h+='<div class="card"><h3 style="margin-bottom:8px">Congelados</h3>';
   if(!filas.length) h+='<p class="muted">Todavía no cargaste compras ni ventas por producto.</p>';
   else h+=filas.map(pd=>{
