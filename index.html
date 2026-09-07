@@ -68,6 +68,10 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .tab.on{background:#292524;color:#fff;border-color:#292524}
 .volver{background:none;border:none;color:#57534e;font-size:14px;padding:0;margin-bottom:12px;font-weight:400}
 .errorbox{background:#b91c1c;color:#fff;font-size:13px;padding:10px 14px;line-height:1.4;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.hubitem{width:100%;background:none;border:none;border-top:1px solid #f5f5f4;padding:11px 2px;display:flex;justify-content:space-between;align-items:center;text-align:left;font-weight:400;color:inherit}
+.hubitem:first-of-type{border-top:none}
+.hubitem:hover{background:#fafaf9}
+.hubitem p:first-child{font-size:14px}
 .detfila3{display:grid;grid-template-columns:1fr 78px 92px;gap:8px;align-items:center;margin-bottom:6px}
 .detfila3>span:first-child{font-size:14px}
 .detfila3 input{padding:7px 8px;font-size:14px}
@@ -514,7 +518,7 @@ function render(){
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   let cuerpo;
   try { cuerpo = ({cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,historialCarne:vHistorialCarne,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,historialCarne:vHistorialCarne,hub:vHub,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
   } catch(err){ mostrarError("al abrir "+panel.tipo+": "+err.message); cuerpo='<div class="card"><p class="muted">No se pudo abrir esta pantalla.</p></div>'; }
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
@@ -597,7 +601,7 @@ function vInicio(){
      '<button class="acc" onclick="abrir(\'retiro\')">Retiro</button>'+
      '<button class="acc" onclick="abrir(\'traspaso\')">Traspaso</button>'+
      '<button class="acc" onclick="abrir(\'empMov\')">Empleado</button>'+
-     '<button class="acc" onclick="abrir(\'semana\')">Semana</button></div>';
+     '<button class="acc" onclick="abrir(\'hub\')">Más</button></div>';
 
   h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'+
      '<h3>'+esc(nombreMes(m))+'</h3><button class="link" onclick="abrir(\'ajustes\')">Historial y ajustes</button></div><div class="resumen">'+
@@ -1413,6 +1417,31 @@ function vResultado(){
   }
   return h;
 }
+/* ---------- menú ---------- */
+function vHub(){
+  const grupo=(titulo,items)=>'<div class="card"><h3 style="margin-bottom:4px">'+titulo+'</h3>'+
+    items.map(([t,sub,dest])=>'<button class="hubitem" onclick="abrir(\''+dest+'\')">'+
+      '<span><p>'+t+'</p><p class="tiny">'+sub+'</p></span><span class="flecha">&#8250;</span></button>').join("")+'</div>';
+
+  let h=grupo("Cargar",[
+    ["Venta de la semana","Kilos o unidades vendidas de cada producto","semana"],
+    ["Conteo de carne","Control de faltantes por familia","control"],
+    ["Inventario del mes","Foto del stock para calcular la ganancia","inventario"]
+  ]);
+  h+=grupo("Ver",[
+    ["Resultado del mes","Ganancia, margen y mercadería consumida","resultado"],
+    ["Informe de productos","Pollo, congelados y rendimiento","informe"],
+    ["Historial de conteos","Faltantes semana a semana","historialCarne"],
+    ["Movimientos","Todo lo cargado, para revisar o editar","movs"],
+    ["Historial y ajustes","Días, exportar, copia de seguridad","ajustes"]
+  ]);
+  h+=grupo("Configurar",[
+    ["Productos","Alta y baja de la lista","productos"],
+    ["Familias y factores","De qué carne sale cada producto","familias"]
+  ]);
+  return h;
+}
+
 /* ---------- productos ---------- */
 function vProductos(){
   const act=datos.productos.filter(x=>x.activo);
