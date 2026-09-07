@@ -68,6 +68,10 @@ button{font-family:inherit;font-size:15px;font-weight:500;border-radius:6px;curs
 .tab.on{background:#292524;color:#fff;border-color:#292524}
 .volver{background:none;border:none;color:#57534e;font-size:14px;padding:0;margin-bottom:12px;font-weight:400}
 .errorbox{background:#b91c1c;color:#fff;font-size:13px;padding:10px 14px;line-height:1.4;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.detfila3{display:grid;grid-template-columns:1fr 78px 92px;gap:8px;align-items:center;margin-bottom:6px}
+.detfila3>span:first-child{font-size:14px}
+.detfila3 input{padding:7px 8px;font-size:14px}
+.recordatorio{background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px;margin-bottom:16px}
 .detfila2{display:grid;grid-template-columns:1fr 80px 28px;gap:8px;align-items:center;margin-bottom:6px}
 .detfila2>span:first-child{font-size:14px}
 .detfila{display:grid;grid-template-columns:1fr 70px 90px 26px;gap:6px;align-items:center;margin-bottom:6px}
@@ -376,6 +380,7 @@ function completar(d){
   ["cierres","gastos","traspasos","consumos","liquidaciones","pedidos","empleados"].forEach(k=>{ if(!d[k]) d[k]=[]; });
   if(!d.proveedores||!d.proveedores.length) d.proveedores=[{id:"pr1",nombre:"Pollo"},{id:"pr2",nombre:"Congelados"}];
   if(!d.retiros) d.retiros=[];
+  if(!d.inventarios) d.inventarios=[];
   if(!d.migRetiros){
     (d.cierres||[]).forEach(c=>{ if(c.retiro>0) d.retiros.push({id:uid8(),fecha:c.fecha,monto:c.retiro,deCierre:true}); });
     d.migRetiros=true;
@@ -389,6 +394,19 @@ function completar(d){
   });
   if(!d.productos||!d.productos.length) d.productos=JSON.parse(JSON.stringify(PRODUCTOS_BASE));
   d.productos = d.productos.map(x=> x.tipo ? x : {...x,tipo:"congelado"});
+  d.productos = d.productos.map(x=>{
+    if(x.fam!==undefined) return x;
+    const n=x.n.toLowerCase();
+    let fam=null, fac=0;
+    if(/burger|medall|albondig/.test(n) && x.tipo==="propio"){ fam="mezcla"; fac=x.u==="kg"?0.9:0; }
+    else if(/crunch/.test(n)){ fam="pechuga"; fac=0.75; }
+    else if(/milanesa.*pechuga|milanes.*pechuga/.test(n)){ fam="pechuga"; fac=0.70; }
+    else if(/milanesa.*(pata|muslo)/.test(n)){ fam="patamuslo"; fac=0.70; }
+    else if(/^pechuga/.test(n)){ fam="pechuga"; fac=1.00; }
+    else if(/pata y muslo|patamuslo/.test(n)){ fam="patamuslo"; fac=1.00; }
+    return {...x,fam,fac};
+  });
+  if(!d.conteos) d.conteos=[];
   if(!d.kgCajon) d.kgCajon=KG_CAJON_DEF;
   if(!d.inicio) d.inicio=INICIAL.inicio;
   d.gastos = d.gastos.map(g=> g.categoria==="Retiro del dueño" ? {...g,categoria:CAT_RETIRO} : g);
@@ -496,7 +514,7 @@ function render(){
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   let cuerpo;
   try { cuerpo = ({cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
   } catch(err){ mostrarError("al abrir "+panel.tipo+": "+err.message); cuerpo='<div class="card"><p class="muted">No se pudo abrir esta pantalla.</p></div>'; }
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
@@ -526,6 +544,15 @@ function vCabecera(){
 
 function vInicio(){
   const s=calcular(datos), m=ym(hoy());
+  const hoyD=new Date(hoy()+"T12:00:00");
+  const ultimo=new Date(hoyD.getFullYear(),hoyD.getMonth()+1,0).getDate();
+  const faltan=ultimo-hoyD.getDate();
+  const avisoInv = (faltan<=1 && !datos.inventarios.some(x=>x.mes===m))
+    ? '<div class="recordatorio"><p style="font-weight:500;margin-bottom:4px">Contá el inventario</p>'+
+      '<p class="tiny" style="margin-bottom:10px">'+(faltan===0?"Hoy es el último día del mes.":"Mañana cierra el mes.")+
+      ' Sin el conteo no se puede calcular la ganancia.</p>'+
+      '<button class="btn2" onclick="abrir(\'inventario\')">Cargar inventario</button></div>'
+    : "";
   const dm=datos.cierres.filter(c=>ym(c.fecha)===m);
   const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
   const prom=dm.length?ventas/dm.length:0;
@@ -553,7 +580,7 @@ function vInicio(){
     ...datos.consumos.filter(c=>c.tipo==="adelanto").map(c=>({...c,k:"consumos",t:"Adelanto",s:(datos.empleados.find(e=>e.id===c.empleadoId)||{}).nombre||""}))
   ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,6);
 
-  let h='<div class="card"><div class="total"><span class="muted">Disponible</span>'+
+  let h=avisoInv+'<div class="card"><div class="total"><span class="muted">Disponible</span>'+
     '<span style="display:flex;align-items:center;gap:10px"><b>'+oc(s.total)+'</b>'+
     '<button class="ojo" onclick="verMontos=!verMontos;render()">'+(verMontos?OJO_ON:OJO_OFF)+'</button></span></div>'+
     '<div class="row">'+
@@ -1118,6 +1145,232 @@ function anularLiq(id){
   notificar("Liquidación anulada. Los consumos vuelven a quedar pendientes.");
 }
 
+/* ---------- familias y factores ---------- */
+const FAMS={pechuga:"Pechuga",patamuslo:"Pata y muslo",mezcla:"Mezcla (sale de las dos)"};
+function vFamilias(){
+  const prods=datos.productos.filter(x=>x.activo&&x.tipo==="propio");
+  let h='<div class="card"><p class="tiny">Para cada producto, de qué carne sale y cuántos kilos de carne cruda lleva por '+
+    'kilo (o por unidad) vendido. Los que dejes sin familia no entran en el control.</p></div>';
+  h+='<div class="card">'+prods.map(pd=>
+    '<div style="padding:8px 0;border-top:1px solid #f5f5f4">'+
+    '<p style="font-size:14px;margin-bottom:6px">'+esc(pd.n)+' <span class="tiny">(por '+(pd.u==="kg"?"kilo":"unidad")+')</span></p>'+
+    '<div class="row" style="margin-bottom:0">'+
+    '<label><span>Familia</span><select id="fm_'+pd.id+'">'+
+      '<option value=""'+(!pd.fam?' selected':'')+'>Sin familia</option>'+
+      Object.keys(FAMS).map(k=>'<option value="'+k+'"'+(pd.fam===k?' selected':'')+'>'+FAMS[k]+'</option>').join("")+
+      '</select></label>'+
+    '<label><span>Carne cruda por '+(pd.u==="kg"?"kg":"un")+'</span><input id="fc_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(pd.fac||"")+'"></label>'+
+    '</div></div>').join("")+'</div>'+
+    '<button class="btn" onclick="guardarFamilias()">Guardar</button>';
+  return h;
+}
+function guardarFamilias(){
+  const prods=datos.productos.map(pd=>{
+    if(!pd.activo||pd.tipo!=="propio") return pd;
+    const f=val("fm_"+pd.id), c=cant(val("fc_"+pd.id));
+    return {...pd, fam:f||null, fac:c};
+  });
+  guardar({...datos,productos:prods});
+  listo("Familias guardadas.");
+}
+
+/* ---------- control semanal de carne ---------- */
+function carneVendida(desde,hasta){
+  const out={pechuga:0,patamuslo:0};
+  datos.ventas.filter(v=>v.desde===desde).forEach(v=>v.items.forEach(i=>{
+    const pd=datos.productos.find(x=>x.id===i.prodId);
+    if(!pd||!pd.fam||!pd.fac) return;
+    const kg=i.cant*pd.fac;
+    if(pd.fam==="mezcla"){ out.pechuga+=kg/2; out.patamuslo+=kg/2; }
+    else out[pd.fam]+=kg;
+  }));
+  return out;
+}
+function carneContada(items){
+  const out={pechuga:0,patamuslo:0};
+  (items||[]).forEach(i=>{
+    const pd=datos.productos.find(x=>x.id===i.prodId);
+    if(!pd||!pd.fam||!pd.fac) return;
+    const kg=i.cant*pd.fac;
+    if(pd.fam==="mezcla"){ out.pechuga+=kg/2; out.patamuslo+=kg/2; }
+    else out[pd.fam]+=kg;
+  });
+  return out;
+}
+function vControl(){
+  const sems=semanasRecientes(8);
+  const d = panel.desde || sems[1].desde;
+  panel.desde=d;
+  const sem=sems.find(x=>x.desde===d)||semanaDe(d);
+  const ex=datos.conteos.find(c=>c.desde===sem.desde);
+  const dAnt=new Date(sem.desde+"T12:00:00"); dAnt.setDate(dAnt.getDate()-7);
+  const ant=datos.conteos.find(c=>c.desde===iso(dAnt));
+  const prods=datos.productos.filter(x=>x.activo&&x.fam&&x.fac);
+
+  let h='<div class="card"><div class="mb"><label><span>Semana</span><select onchange="panel.desde=this.value;render()">'+
+    sems.map((x,i)=>'<option value="'+x.desde+'"'+(x.desde===sem.desde?' selected':'')+'>'+fec(x.desde)+' al '+fec(x.hasta)+(i===0?' (en curso)':'')+'</option>').join("")+
+    '</select></label></div><p class="tiny">Contá lo que hay de cada producto. La app lo convierte a kilos de carne cruda.</p></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Kilos que entraron</h3><div class="row">'+
+    '<label><span>Pechuga</span><input id="en_pechuga" inputmode="decimal" placeholder="0" value="'+((ex&&ex.ingresos&&ex.ingresos.pechuga)||"")+'"></label>'+
+    '<label><span>Pata y muslo</span><input id="en_patamuslo" inputmode="decimal" placeholder="0" value="'+((ex&&ex.ingresos&&ex.ingresos.patamuslo)||"")+'"></label>'+
+    '</div><p class="tiny">Lo que sacaste del cajón esta semana.</p></div>';
+
+  h+='<div class="card"><h3 style="margin-bottom:8px">Conteo</h3>'+
+    prods.map(pd=>{
+      const v = ex ? (ex.items.find(i=>i.prodId===pd.id)||{}).cant : "";
+      return '<div class="detfila2"><span>'+esc(pd.n)+'</span>'+
+        '<input id="ct_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(v||"")+'">'+
+        '<span class="tiny">'+pd.u+'</span></div>';
+    }).join("")+'</div>';
+
+  if(ant){
+    const ini=carneContada(ant.items), ven=carneVendida(sem.desde,sem.hasta);
+    const ing=(ex&&ex.ingresos)||{pechuga:0,patamuslo:0};
+    const cont=ex?carneContada(ex.items):null;
+    h+='<div class="card"><h3 style="margin-bottom:8px">Resultado</h3>';
+    ["pechuga","patamuslo"].forEach(f=>{
+      const teo=ini[f]+(ing[f]||0)-ven[f];
+      h+='<p style="font-size:14px;font-weight:500;margin:8px 0 4px">'+FAMS[f]+'</p><div class="resumen">'+
+        fila("Había al cierre anterior",fmt(ini[f])+" kg")+
+        fila("Entró",fmt(ing[f]||0)+" kg")+
+        fila("Vendido",fmt(ven[f])+" kg")+
+        fila("Debería haber",fmt(teo)+" kg",true)+
+        (cont?fila("Contado",fmt(cont[f])+" kg"):"")+
+        (cont?fila(teo-cont[f]>=0?"Faltante":"Sobrante",fmt(Math.abs(teo-cont[f]))+" kg",true):"")+
+        '</div>';
+    });
+    h+='</div>';
+  } else {
+    h+='<div class="card"><p class="muted">Este es el primer conteo o falta el de la semana anterior. Guardalo igual: sirve de punto de partida.</p></div>';
+  }
+  h+='<button class="btn" onclick="guardarConteo()">Guardar conteo</button>';
+  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'familias\')">Configurar familias y factores</button></p>';
+  return h;
+}
+function guardarConteo(){
+  const sem=semanaDe(panel.desde);
+  const items=datos.productos.filter(x=>x.activo&&x.fam&&x.fac)
+    .map(pd=>({prodId:pd.id,cant:cant(val("ct_"+pd.id))})).filter(i=>i.cant>0);
+  const reg={id:uid8(),desde:sem.desde,hasta:sem.hasta,
+    ingresos:{pechuga:cant(val("en_pechuga")),patamuslo:cant(val("en_patamuslo"))},items};
+  guardar({...datos,conteos:[...datos.conteos.filter(c=>c.desde!==sem.desde),reg]});
+  listo("Conteo del "+fec(sem.desde)+" al "+fec(sem.hasta)+" guardado.");
+}
+
+/* ---------- inventario mensual ---------- */
+function finDeMes(ym){
+  const y=+ym.slice(0,4), m=+ym.slice(5,7);
+  return iso(new Date(y, m, 0));
+}
+function mesesInv(n){
+  const out=[]; const d=new Date(hoy()+"T12:00:00");
+  for(let i=0;i<n;i++){ out.push(iso(d).slice(0,7)); d.setMonth(d.getMonth()-1); }
+  return out;
+}
+const invDe = ym => datos.inventarios.find(x=>x.mes===ym);
+function valorInv(inv){ return inv ? inv.items.reduce((a,i)=>a+i.cant*i.costo,0) : 0; }
+
+function vInventario(){
+  const meses=mesesInv(6);
+  const ym = panel.mes || meses[0];
+  panel.mes = ym;
+  const ex = invDe(ym);
+  const prev = invDe(mesesInv(13)[mesesInv(13).indexOf(ym)+1] || "");
+  const prods = datos.productos.filter(x=>x.activo);
+
+  let h='<div class="card"><div class="mb"><label><span>Inventario al cierre de</span>'+
+    '<select onchange="panel.mes=this.value;render()">'+
+    meses.map(m=>'<option value="'+m+'"'+(m===ym?' selected':'')+'>'+esc(nombreMes(m))+'</option>').join("")+
+    '</select></label></div>'+
+    '<p class="tiny">Contá lo que hay en el local al '+fec(finDeMes(ym))+'. El costo es lo que te salió a vos, no el precio de venta.</p>'+
+    (ex?'<p class="muted" style="margin-top:8px">Ya cargaste este mes. Si guardás, lo reemplazás.</p>':'')+
+    '</div>';
+
+  const bloque=(t,nom)=>{
+    const f=prods.filter(x=>x.tipo===t);
+    if(!f.length) return "";
+    return '<div class="card"><h3 style="margin-bottom:8px">'+nom+'</h3>'+
+      '<div class="detfila3"><span class="tiny">producto</span><span class="tiny">cantidad</span><span class="tiny">costo x '+(f[0].u==="kg"?"kg":"un")+'</span></div>'+
+      f.map(pd=>{
+        const it = ex ? (ex.items.find(i=>i.prodId===pd.id)||{}) : {};
+        const cAnt = prev ? (prev.items.find(i=>i.prodId===pd.id)||{}).costo : "";
+        return '<div class="detfila3"><span>'+esc(pd.n)+'</span>'+
+          '<input id="ic_'+pd.id+'" inputmode="decimal" placeholder="0" value="'+(it.cant||"")+'">'+
+          '<input id="ik_'+pd.id+'" inputmode="decimal" placeholder="'+(cAnt||"0")+'" value="'+(it.costo||"")+'">'+
+          '</div>';
+      }).join("")+'</div>';
+  };
+  h+=bloque("propio","Producción propia");
+  h+=bloque("congelado","Congelados");
+  h+='<button class="btn" onclick="guardarInventario()">Guardar inventario</button>';
+  if(ex) h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'resultado\')">Ver resultado del mes</button></p>';
+  return h;
+}
+function guardarInventario(){
+  const items=datos.productos.filter(x=>x.activo).map(pd=>({
+    prodId:pd.id, cant:cant(val("ic_"+pd.id)), costo:num(val("ik_"+pd.id))
+  })).filter(i=>i.cant>0);
+  if(!items.length) return notificar("No cargaste ninguna cantidad.");
+  const reg={id:uid8(), mes:panel.mes, fecha:finDeMes(panel.mes), items};
+  guardar({...datos,inventarios:[...datos.inventarios.filter(x=>x.mes!==panel.mes),reg]});
+  listo("Inventario de "+nombreMes(panel.mes)+" guardado: "+$$(valorInv(reg))+".");
+}
+
+/* ---------- resultado del mes ---------- */
+function resultadoMes(ym){
+  const dm = datos.cierres.filter(c=>c.fecha.slice(0,7)===ym);
+  const ventas = dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
+  const consEmp = datos.consumos.filter(c=>c.tipo!=="adelanto"&&c.fecha.slice(0,7)===ym).reduce((a,c)=>a+c.monto,0);
+  const peds = datos.pedidos.filter(x=>x.fecha.slice(0,7)===ym);
+  const compras = peds.reduce((a,x)=>a+x.monto,0);
+  const gs = datos.gastos.filter(g=>g.fecha.slice(0,7)===ym);
+  const esProv = g => datos.proveedores.some(pr=>pr.nombre===g.categoria);
+  const oper = gs.filter(g=>!esProv(g)&&g.categoria!==CAT_RETIRO&&g.categoria!==CAT_ESPECIE)
+                 .reduce((a,g)=>a+g.monto,0);
+  const especie = gs.filter(g=>g.categoria===CAT_ESPECIE).reduce((a,g)=>a+g.monto,0);
+  const chicos = dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const sueldos = datos.liquidaciones.filter(l=>l.fecha.slice(0,7)===ym).reduce((a,l)=>a+l.bruto,0);
+
+  const idx = mesesInv(24).indexOf(ym);
+  const invFin = invDe(ym), invIni = invDe(mesesInv(24)[idx+1]||"");
+  const vFin = valorInv(invFin), vIni = valorInv(invIni);
+  const consumo = (invIni&&invFin) ? vIni + compras - vFin - especie : null;
+  const resultado = consumo===null ? null : ventas + consEmp - consumo - oper - chicos - sueldos;
+  return {ventas,consEmp,compras,oper,chicos,sueldos,especie,vIni,vFin,consumo,resultado,invIni:!!invIni,invFin:!!invFin};
+}
+
+function vResultado(){
+  const meses=mesesInv(6);
+  const ym = panel.mes || meses[0];
+  panel.mes = ym;
+  const r = resultadoMes(ym);
+  let h='<div class="card"><div class="mb"><label><span>Mes</span><select onchange="panel.mes=this.value;render()">'+
+    meses.map(m=>'<option value="'+m+'"'+(m===ym?' selected':'')+'>'+esc(nombreMes(m))+'</option>').join("")+
+    '</select></label></div></div>';
+
+  if(r.consumo===null){
+    h+='<div class="card"><p class="muted">Para calcular la ganancia hacen falta dos inventarios: el del cierre del mes anterior y el de este mes.</p>'+
+       '<p class="tiny" style="margin-top:8px">'+(r.invIni?"":"Falta el del mes anterior. ")+(r.invFin?"":"Falta el de este mes.")+'</p>'+
+       '<p style="margin-top:10px"><button class="link" onclick="abrir(\'inventario\')">Cargar inventario</button></p></div>';
+  } else {
+    h+='<div class="card"><h3 style="margin-bottom:8px">Mercadería consumida</h3><div class="resumen">'+
+      fila("Stock al inicio",$$(r.vIni))+fila("Compras del mes",$$(r.compras))+
+      fila("Stock al cierre","−"+$$(r.vFin))+
+      (r.especie?fila("Retiros en especie","−"+$$(r.especie)):"")+
+      fila("Consumida",$$(r.consumo),true)+'</div></div>';
+    h+='<div class="card"><h3 style="margin-bottom:8px">Resultado de '+esc(nombreMes(ym))+'</h3><div class="resumen">'+
+      fila("Ventas",$$(r.ventas))+
+      (r.consEmp?fila("Mercadería a empleados",$$(r.consEmp)):"")+
+      fila("Mercadería consumida","−"+$$(r.consumo))+
+      fila("Sueldos","−"+$$(r.sueldos))+
+      fila("Gastos operativos","−"+$$(r.oper))+
+      fila("Gastos chicos del cajón","−"+$$(r.chicos))+
+      fila("GANANCIA",$$(r.resultado),true)+
+      (r.ventas?fila("Margen",(r.resultado/r.ventas*100).toFixed(1)+"%"):"")+'</div></div>';
+  }
+  return h;
+}
 /* ---------- productos ---------- */
 function vProductos(){
   const act=datos.productos.filter(x=>x.activo);
@@ -1193,6 +1446,7 @@ function vSemana(){
   h+='<button class="btn" onclick="guardarSemana()">Guardar semana</button>';
   if(ex) h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="borrarSemana(\''+sem.desde+'\')">Borrar esta semana</button></p>';
   h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'productos\')">Administrar productos</button>'+
+     ' &nbsp;·&nbsp; <button class="link" onclick="abrir(\'control\')">Control de carne</button>'+
      ' &nbsp;·&nbsp; <button class="link" onclick="abrir(\'informe\')">Ver informe</button></p>';
   return h;
 }
@@ -1269,7 +1523,9 @@ function vInforme(){
       (r>100?'<p class="tiny" style="margin-top:8px;color:#b91c1c">No puede pasar de 100%. Faltan cargar pedidos de pollo: para esos kilos harían falta unos '+fmt(Math.ceil(kgProp/datos.kgCajon))+' cajones y cargaste '+fmt(cajones)+'.</p>':'')+
       '</div>';
   }
-  h+='<button class="btn2" onclick="abrir(\'semana\')">Cargar venta de la semana</button>';
+  h+='<button class="btn2" onclick="abrir(\'semana\')">Cargar venta de la semana</button>'+
+     '<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'inventario\')">Inventario del mes</button>'+
+     ' &nbsp;·&nbsp; <button class="link" onclick="abrir(\'resultado\')">Resultado del mes</button></p>';
   return h;
 }
 
@@ -1451,6 +1707,54 @@ function armarResumen(){
     }
   } else {
     L.push("","VENTA POR PRODUCTO: no hay semanas cargadas en este período.");
+  }
+
+  const mesR=d2.slice(0,7);
+  const rr=resultadoMes(mesR);
+  L.push("","RESULTADO DE "+nombreMes(mesR).toUpperCase());
+  if(rr.consumo===null) L.push("No calculable: faltan inventarios (inicio y cierre del mes).");
+  else {
+    L.push("Stock inicial: "+$$(rr.vIni)+" | compras: "+$$(rr.compras)+" | stock final: "+$$(rr.vFin));
+    L.push("Mercadería consumida: "+$$(rr.consumo));
+    L.push("Ventas: "+$$(rr.ventas)+" | sueldos: "+$$(rr.sueldos)+" | gastos operativos: "+$$(rr.oper)+" | gastos chicos: "+$$(rr.chicos));
+    L.push("GANANCIA: "+$$(rr.resultado)+(rr.ventas?" | margen "+(rr.resultado/rr.ventas*100).toFixed(1)+"%":""));
+  }
+  /* ---- comparativo mes a mes ---- */
+  const mesesDatos=[...new Set([].concat(
+    datos.pedidos.map(x=>ym(x.fecha)), datos.ventas.map(v=>ym(v.hasta)),
+    datos.cierres.map(c=>ym(c.fecha))))].sort();
+  if(mesesDatos.length){
+    L.push("","MES A MES (mes; cajones; kg comprados; $ pollo; costo x kg; kg propios vendidos; rendimiento; ventas)");
+    mesesDatos.forEach(mm=>{
+      const pe=datos.pedidos.filter(x=>ym(x.fecha)===mm&&provPollo&&x.provId===provPollo.id);
+      const caj=pe.reduce((a,x)=>a+(x.cajones||0),0);
+      const kgc=pe.reduce((a,x)=>a+(x.kg||0),0);
+      const pl=pe.reduce((a,x)=>a+(x.monto-(x.otros||0)),0);
+      let kgv=0;
+      datos.ventas.filter(v=>ym(v.hasta)===mm).forEach(v=>v.items.forEach(i=>{
+        const pd=datos.productos.find(x=>x.id===i.prodId);
+        if(pd&&pd.tipo==="propio"&&pd.u==="kg") kgv+=i.cant;
+      }));
+      const vt=datos.cierres.filter(c=>ym(c.fecha)===mm).reduce((a,c)=>a+c.efectivo+c.posnet,0);
+      L.push([nombreMes(mm), fmt(caj), fmt(kgc)+" kg", $$(pl), kgc?$$(pl/kgc):"-",
+              fmt(kgv)+" kg", (kgc&&kgv)?(kgv/kgc*100).toFixed(1)+"%":"-", $$(vt)].join("; "));
+    });
+  }
+
+  /* ---- control de carne ---- */
+  const cts=datos.conteos.filter(c=>!(c.hasta<d1||c.desde>d2)).sort((a,b)=>a.desde<b.desde?-1:1);
+  if(cts.length){
+    L.push("","CONTROL DE CARNE (semana; familia; debería haber; contado; faltante)");
+    cts.forEach(c=>{
+      const da=new Date(c.desde+"T12:00:00"); da.setDate(da.getDate()-7);
+      const ant=datos.conteos.find(x=>x.desde===iso(da));
+      if(!ant) return;
+      const ini=carneContada(ant.items), ven=carneVendida(c.desde,c.hasta), cont=carneContada(c.items);
+      ["pechuga","patamuslo"].forEach(f=>{
+        const teo=ini[f]+((c.ingresos&&c.ingresos[f])||0)-ven[f];
+        L.push(fec(c.desde)+" al "+fec(c.hasta)+"; "+FAMS[f]+"; "+fmt(teo)+" kg; "+fmt(cont[f])+" kg; "+fmt(teo-cont[f])+" kg");
+      });
+    });
   }
 
   L.push("","TRASPASOS");
