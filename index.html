@@ -514,7 +514,7 @@ function render(){
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   let cuerpo;
   try { cuerpo = ({cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,historialCarne:vHistorialCarne,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
   } catch(err){ mostrarError("al abrir "+panel.tipo+": "+err.message); cuerpo='<div class="card"><p class="muted">No se pudo abrir esta pantalla.</p></div>'; }
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
@@ -1245,7 +1245,8 @@ function vControl(){
     h+='<div class="card"><p class="muted">Este es el primer conteo o falta el de la semana anterior. Guardalo igual: sirve de punto de partida.</p></div>';
   }
   h+='<button class="btn" onclick="guardarConteo()">Guardar conteo</button>';
-  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'familias\')">Configurar familias y factores</button></p>';
+  h+='<p style="margin-top:12px;text-align:center"><button class="link" onclick="abrir(\'familias\')">Configurar familias y factores</button>'+
+     ' &nbsp;·&nbsp; <button class="link" onclick="abrir(\'historialCarne\')">Ver historial</button></p>';
   return h;
 }
 function guardarConteo(){
@@ -1257,6 +1258,47 @@ function guardarConteo(){
   guardar({...datos,conteos:[...datos.conteos.filter(c=>c.desde!==sem.desde),reg]});
   listo("Conteo del "+fec(sem.desde)+" al "+fec(sem.hasta)+" guardado.");
 }
+
+function filaControl(c){
+  const da=new Date(c.desde+"T12:00:00"); da.setDate(da.getDate()-7);
+  const ant=datos.conteos.find(x=>x.desde===iso(da));
+  const cont=carneContada(c.items);
+  const ven=carneVendida(c.desde,c.hasta);
+  const ing=c.ingresos||{};
+  if(!ant) return {c,cont,ven,ing,ini:null};
+  return {c,cont,ven,ing,ini:carneContada(ant.items)};
+}
+function vHistorialCarne(){
+  const cs=[...datos.conteos].sort((a,b)=>a.desde<b.desde?1:-1);
+  if(!cs.length) return '<div class="card"><p class="muted">Todavía no hay conteos guardados.</p></div>';
+  let h='<div class="card"><p class="tiny">Un bloque por semana. El faltante sale de: lo que había, más lo que entró, menos lo vendido, contra lo contado.</p></div>';
+  cs.forEach(c=>{
+    const r=filaControl(c);
+    h+='<div class="card"><h3 style="margin-bottom:8px">'+fec(c.desde)+' al '+fec(c.hasta)+'</h3>';
+    ["pechuga","patamuslo"].forEach(f=>{
+      const ing=r.ing[f]||0;
+      if(r.ini===null){
+        h+='<p style="font-size:14px;font-weight:500;margin:8px 0 4px">'+FAMS[f]+'</p><div class="resumen">'+
+           fila("Contado",fmt(r.cont[f])+" kg",true)+
+           fila("Entró",fmt(ing)+" kg")+fila("Vendido",fmt(r.ven[f])+" kg")+
+           '</div><p class="tiny" style="margin-top:4px">Sin semana anterior: no se puede calcular faltante.</p>';
+      } else {
+        const teo=r.ini[f]+ing-r.ven[f], dif=teo-r.cont[f];
+        const pct = r.ven[f] ? (dif/r.ven[f]*100) : 0;
+        h+='<p style="font-size:14px;font-weight:500;margin:8px 0 4px">'+FAMS[f]+'</p><div class="resumen">'+
+           fila("Había",fmt(r.ini[f])+" kg")+fila("Entró",fmt(ing)+" kg")+
+           fila("Vendido",fmt(r.ven[f])+" kg")+fila("Debería haber",fmt(teo)+" kg")+
+           fila("Contado",fmt(r.cont[f])+" kg")+
+           fila(dif>=0?"Faltante":"Sobrante",fmt(Math.abs(dif))+" kg"+(r.ven[f]?" ("+Math.abs(pct).toFixed(1)+"% de lo vendido)":""),true)+
+           '</div>';
+      }
+    });
+    h+='<p style="margin-top:10px"><button class="link" onclick="panel={tipo:\'control\',desde:\''+c.desde+'\'};render()">Editar esta semana</button>'+
+       ' &nbsp;·&nbsp; <button class="del" onclick="borrarConteo(\''+c.desde+'\')">Borrar</button></p></div>';
+  });
+  return h;
+}
+function borrarConteo(d){ guardar({...datos,conteos:datos.conteos.filter(c=>c.desde!==d)}); notificar("Conteo borrado."); }
 
 /* ---------- inventario mensual ---------- */
 function finDeMes(ym){
