@@ -281,7 +281,7 @@ window.addEventListener("unhandledrejection",e=>{
   if(m.indexOf("persistence")>=0||m.indexOf("Persistence")>=0) return;  /* el modo sin conexion no siempre esta disponible */
   mostrarError(m);
 });
-let verMontos = false, verEmpleados = false;
+let verMontos = false, verEmpleados = false, pila = [];
 const OJO_ON='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
 const OJO_OFF='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 19c-6.5 0-10-7-10-7a18 18 0 0 1 5.1-5.9M9.9 4.2A10 10 0 0 1 12 4c6.5 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22"/></svg>';
 const oc = v => verMontos ? $$(v) : '<span class="oculto">••••••</span>';
@@ -429,8 +429,10 @@ function deudaProv(pr){
   return ped-pag;
 }
 const deudaTotal = () => datos.proveedores.reduce((a,pr)=>a+Math.max(0,deudaProv(pr)),0);
-function volver(){ panel=null; render(); window.scrollTo(0,0); }
-function listo(msg){ panel=null; notificar(msg); }
+function volver(){ panel = pila.length ? pila.pop() : null; render(); window.scrollTo(0,0); }
+function alInicio(){ pila=[]; panel=null; render(); window.scrollTo(0,0); }
+function listo(msg){ panel = pila.length ? pila.pop() : null; notificar(msg); }
+function sigo(msg){ notificar(msg); }   /* guarda y deja seguir cargando */
 
 /* ---------- arranque ---------- */
 async function iniciar(){
@@ -649,8 +651,9 @@ function vInicio(){
 }
 
 const fila=(l,v,f)=>'<div class="fila'+(f?" fuerte":"")+'"><span>'+esc(l)+'</span><span>'+v+'</span></div>';
-function abrir(t){ panel={tipo:t}; render(); window.scrollTo(0,0); }
-function verEmpleado(id){ panel={tipo:"empleado",emp:datos.empleados.find(e=>e.id===id)}; render(); }
+function abrir(t){ if(panel) pila.push(panel); if(pila.length>15) pila.shift(); panel={tipo:t}; render(); window.scrollTo(0,0); }
+function irA(p){ if(panel) pila.push(panel); if(pila.length>15) pila.shift(); panel=p; render(); window.scrollTo(0,0); }
+function verEmpleado(id){ irA({tipo:"empleado",emp:datos.empleados.find(e=>e.id===id)}); }
 function borrarMov(k,id){ const n={...datos}; n[k]=datos[k].filter(x=>x.id!==id); guardar(n); }
 
 /* ---------- cierre ---------- */
@@ -667,7 +670,7 @@ function vCierre(){
    '<div class="row"><label><span>Cobrado en efectivo</span><input id="ce" inputmode="decimal" value="'+v("efectivo")+'" oninput="recalcCierre()"></label>'+
    '<label><span>Cobrado por Posnet</span><input id="cp" inputmode="decimal" value="'+v("posnet")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="row"><label><span>Retiré del cajón</span><div style="padding:9px 11px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:6px;font-size:16px">'+$$(retirosDe(f))+
-   '</div><button class="link" style="margin-top:4px" onclick="panel={tipo:\'retiro\',fecha:\''+f+'\'};render()">Cargar un retiro</button></label>'+
+   '</div><button class="link" style="margin-top:4px" onclick="irA({tipo:\'retiro\',fecha:\''+f+'\'};render()">Cargar un retiro</button></label>'+
    '<label><span>Quedó en caja</span><input id="cq" inputmode="decimal" value="'+v("quedo")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="mb"><label><span>De lo que salió del cajón, gastos conocidos</span><input id="cg" inputmode="decimal" placeholder="0" value="'+v("gastosConocidos")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="mb"><label><span>Saldo real del banco</span><input id="cb" inputmode="decimal" value="'+v("banco")+'" oninput="recalcCierre()"></label></div>'+
@@ -734,7 +737,9 @@ function guardarGasto(){
   const reg={id:panel.edit||uid8(),fecha:val("gf"),categoria:val("gc"),monto:m,origen:val("go"),nota:val("gn")};
   const lista = panel.edit ? datos.gastos.map(x=>x.id===panel.edit?reg:x) : [...datos.gastos,reg];
   guardar({...datos,gastos:lista});
-  listo(panel.edit?"Gasto modificado.":"Gasto registrado.");
+  if(panel.edit){ listo("Gasto modificado."); return; }
+  ["gm","gn"].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=""; });
+  render(); sigo("Gasto registrado. Podés cargar otro.");
 }
 
 /* ---------- traspaso ---------- */
@@ -776,28 +781,57 @@ function guardarTraspaso(){
 
 /* ---------- consumo / adelanto ---------- */
 function vEmpMov(){
-  const t = panel.t || "consumo";
-  panel.t = t;
   const act = datos.empleados.filter(e=>e.activo);
-  return '<div class="card"><div class="tabs">'+
-   '<button class="tab'+(t==="consumo"?" on":"")+'" onclick="panel.t=\'consumo\';render()">Mercadería</button>'+
-   '<button class="tab'+(t==="adelanto"?" on":"")+'" onclick="panel.t=\'adelanto\';render()">Adelanto en plata</button></div>'+
-   '<div class="row"><label><span>Fecha</span><input type="date" id="mf" value="'+hoy()+'"></label>'+
-   '<label><span>Empleado</span><select id="me">'+act.map(e=>'<option value="'+e.id+'">'+esc(e.nombre)+'</option>').join("")+'</select></label></div>'+
-   '<div class="row"><label><span>Importe</span><input id="mm" inputmode="decimal" placeholder="0"></label>'+
+  const t = panel.t || "consumo";  panel.t = t;
+  const emp = panel.emp || (act[0]||{}).id || "";  panel.emp = emp;
+  const f = panel.f || hoy();  panel.f = f;
+  const quien = act.find(e=>e.id===emp);
+  const pend = datos.consumos.filter(c=>c.empleadoId===emp&&!c.liquidado)
+    .sort((a,b)=>a.fecha<b.fecha?1:-1);
+  const saldo = pend.reduce((a,c)=>a+c.monto,0);
+
+  let h='<div class="card">'+
+   '<div class="mb"><label><span>Empleado</span><select onchange="panel.emp=this.value;render()">'+
+   act.map(e=>'<option value="'+e.id+'"'+(e.id===emp?' selected':'')+'>'+esc(e.nombre)+'</option>').join("")+
+   '</select></label></div>'+
+   '<div class="tabs">'+
+   [["consumo","Mercadería"],["adelanto","Adelanto en plata"]].map(([k,l])=>
+     '<button class="tab'+(t===k?" on":"")+'" onclick="panel.t=\''+k+'\';render()">'+l+'</button>').join("")+
+   '</div>'+
+   '<div class="row"><label><span>Fecha</span><input type="date" id="mf" value="'+f+'" onchange="panel.f=this.value"></label>'+
+   '<label><span>Importe</span><input id="mm" inputmode="decimal" placeholder="0" onkeydown="if(event.key===\'Enter\')guardarMov()"></label></div>'+
+   '<div class="row">'+
    (t==="adelanto"
-     ? '<label><span>Salió de</span><select id="mo"><option value="efectivo">Efectivo</option><option value="banco">Banco</option></select></label>'
-     : '<label><span>Qué se llevó (opcional)</span><input id="mn"></label>')+'</div>'+
-   '<p class="tiny">'+(t==="adelanto"?"Sale de la caja que elijas y se descuenta del próximo sueldo.":"No toca la caja: solo queda como saldo a descontar.")+'</p></div>'+
-   '<button class="btn" onclick="guardarMov()">'+(t==="adelanto"?"Registrar adelanto":"Cargar consumo")+'</button>';
+     ? '<label><span>Salió de</span><select id="mo"><option value="efectivo">Efectivo</option><option value="banco">Banco</option></select></label><label></label>'
+     : '<label><span>Qué se llevó (opcional)</span><input id="mn"></label><label></label>')+
+   '</div>'+
+   '<button class="btn" onclick="guardarMov()">'+(t==="adelanto"?"Registrar adelanto":"Cargar consumo")+'</button>'+
+   '<p class="tiny" style="margin-top:8px">'+(t==="adelanto"
+     ? "Sale de la caja que elijas y se descuenta del próximo sueldo."
+     : "No toca la caja: solo queda como saldo a descontar.")+
+   ' La pantalla queda abierta para que cargues varios seguidos.</p></div>';
+
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'+
+     '<h3>Pendiente de '+esc(quien?quien.nombre:"")+'</h3>'+
+     '<span class="fuerte" style="font-size:14px;font-variant-numeric:tabular-nums">'+$$(saldo)+'</span></div>';
+  h+= pend.length ? pend.slice(0,12).map(c=>
+      '<div class="item"><div class="txt"><p>'+esc(etiqueta(c))+'</p></div>'+
+      '<div class="der"><span>'+$$(c.monto)+'</span>'+
+      '<button class="del" onclick="borrarMov(\'consumos\',\''+c.id+'\')">Borrar</button></div></div>').join("")
+      : '<p class="muted">Sin movimientos pendientes.</p>';
+  h+='</div>';
+  return h;
 }
 function guardarMov(){
   const m=num(val("mm")), t=panel.t;
-  if(!val("me")) return notificar("Elegí el empleado.");
+  if(!panel.emp) return notificar("Elegí el empleado.");
   if(m<=0) return notificar("Poné el importe.");
-  guardar({...datos,consumos:[...datos.consumos,{id:uid8(),empleadoId:val("me"),fecha:val("mf"),monto:m,
+  guardar({...datos,consumos:[...datos.consumos,{id:uid8(),empleadoId:panel.emp,fecha:panel.f,monto:m,
     nota:t==="adelanto"?"":val("mn"),tipo:t,origen:t==="adelanto"?val("mo"):null,liquidado:false}]});
-  listo(t==="adelanto"?"Adelanto registrado.":"Consumo cargado.");
+  render();
+  const e=document.getElementById("mm"); if(e){ e.value=""; e.focus(); }
+  const n=document.getElementById("mn"); if(n) n.value="";
+  sigo(t==="adelanto"?"Adelanto registrado.":"Consumo cargado.");
 }
 
 /* ---------- ficha del empleado ---------- */
@@ -820,7 +854,7 @@ function vEmpleado(){
       liqs.map(l=>'<div class="item"><div class="txt"><p>'+fec(l.fecha)+'</p><p class="tiny">bruto '+$$(l.bruto)+
       ' · descontado '+$$(l.descontado)+'</p></div><div class="der"><span>'+$$(l.neto)+'</span></div></div>').join("")+'</div>';
   }
-  h+='<button class="btn" onclick="panel={tipo:\'liquidar\',emp:panel.emp};render()">Liquidar sueldo</button>';
+  h+='<button class="btn" onclick="irA({tipo:\'liquidar\',emp:panel.emp})">Liquidar sueldo</button>';
   h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="darBaja()">Dar de baja</button></p>';
   return h;
 }
@@ -1010,7 +1044,9 @@ function guardarPedido(){
   const lista = panel.edit ? datos.pedidos.map(x=>x.id===panel.edit?reg:x) : [...datos.pedidos,reg];
   panel.det=null; panel.pagado=undefined;
   guardar({...datos,pedidos:lista});
-  listo(panel.edit?"Pedido modificado.":"Pedido registrado.");
+  if(panel.edit){ listo("Pedido modificado."); return; }
+  panel.det=[]; panel.pagado=undefined;
+  render(); sigo("Pedido registrado. Podés cargar otro.");
 }
 
 function guardarSaldosIni(){
@@ -1074,7 +1110,7 @@ function guardarRetiro(){
   const m=num(val("rm"));
   if(m<=0) return notificar("Poné cuánto sacaste.");
   guardar({...datos,retiros:[...(datos.retiros||[]),{id:uid8(),fecha:val("rf"),monto:m}]});
-  notificar("Retiro registrado.");
+  sigo("Retiro registrado.");
 }
 
 /* ---------- registro de movimientos ---------- */
@@ -1093,12 +1129,12 @@ function vMovs(){
   datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
     t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+" · quedó "+$$(c.quedo),
     monto:c.efectivo+c.posnet, signo:"+",
-    acc:'<button class="link" onclick="panel={tipo:\'cierre\',fecha:\''+c.fecha+'\'};render()">Editar</button>'}));
+    acc:'<button class="link" onclick="irA({tipo:\'cierre\',fecha:\''+c.fecha+'\'});">Editar</button>'}));
 
   datos.gastos.filter(x=>ym(x.fecha)===m).forEach(g=>items.push({fecha:g.fecha,
     t:g.categoria+(g.nota?" · "+g.nota:""), sub:g.origen==="efectivo"?"efectivo":"cuenta bancaria",
     monto:g.monto, signo:"−",
-    acc:'<button class="link" onclick="panel={tipo:\'gasto\',edit:\''+g.id+'\'};render()">Editar</button>'}));
+    acc:'<button class="link" onclick="irA({tipo:\'gasto\',edit:\''+g.id+'\'});">Editar</button>'}));
 
   datos.pedidos.filter(x=>ym(x.fecha)===m).forEach(x=>items.push({fecha:x.fecha,
     t:"Pedido a "+nomP(x.provId),
@@ -1106,7 +1142,7 @@ function vMovs(){
         (x.pagado?(function(){const g=pagoDe(x);
    return " · pagado "+(g.efe&&g.ban?"mitad y mitad":(g.ban?"por banco":"en efectivo"));})():" · a cuenta"),
     monto:x.monto, signo:x.pagado?"−":"deuda",
-    acc:'<button class="link" onclick="panel={tipo:\'pedido\',edit:\''+x.id+'\'};render()">Editar</button>'}));
+    acc:'<button class="link" onclick="irA({tipo:\'pedido\',edit:\''+x.id+'\'});">Editar</button>'}));
 
   (datos.retiros||[]).filter(x=>ym(x.fecha)===m).forEach(r=>items.push({fecha:r.fecha,
     t:"Retiro del cajón", sub:"pasó al efectivo", monto:r.monto, signo:"=",
@@ -1115,7 +1151,7 @@ function vMovs(){
   datos.traspasos.filter(x=>ym(x.fecha)===m).forEach(t=>items.push({fecha:t.fecha,
     t:t.sentido==="be"?"Traspaso banco a efectivo":"Traspaso efectivo a banco",
     sub:t.comision?"comisión "+$$(t.comision):"sin comisión", monto:t.monto, signo:"=",
-    acc:'<button class="link" onclick="panel={tipo:\'traspaso\',edit:\''+t.id+'\'};render()">Editar</button>'}));
+    acc:'<button class="link" onclick="irA({tipo:\'traspaso\',edit:\''+t.id+'\'});">Editar</button>'}));
 
   datos.consumos.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
     t:(c.tipo==="adelanto"?"Adelanto a ":"Mercadería a ")+nom(c.empleadoId),
@@ -1297,7 +1333,7 @@ function vHistorialCarne(){
            '</div>';
       }
     });
-    h+='<p style="margin-top:10px"><button class="link" onclick="panel={tipo:\'control\',desde:\''+c.desde+'\'};render()">Editar esta semana</button>'+
+    h+='<p style="margin-top:10px"><button class="link" onclick="irA({tipo:\'control\',desde:\''+c.desde+'\'});">Editar esta semana</button>'+
        ' &nbsp;·&nbsp; <button class="del" onclick="borrarConteo(\''+c.desde+'\')">Borrar</button></p></div>';
   });
   return h;
