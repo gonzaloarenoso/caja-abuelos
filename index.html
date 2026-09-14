@@ -302,6 +302,7 @@ function cant(v){                       /* cantidades: 1,5 y 1.5 son lo mismo */
 const fmt = n => (n||0).toLocaleString("es-AR",{minimumFractionDigits:0,maximumFractionDigits:2});
 const $$ = n => "$ "+fmt(n);
 const fec = i => i ? i.slice(8,10)+"/"+i.slice(5,7) : "";
+const fecL = i => i ? i.slice(8,10)+"/"+i.slice(5,7)+"/"+i.slice(0,4) : "";
 const ym = i => (i||"").slice(0,7);
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 const nombreMes = m => m ? MESES[parseInt(m.slice(5,7),10)-1]+" "+m.slice(0,4) : "";
@@ -1619,7 +1620,7 @@ function vInforme(){
       '<div class="der"><span>'+$$(c.monto)+'</span></div></div>';
   }).join("");
   h+='</div>';
-  const kgProp=datos.productos.filter(x=>x.tipo==="propio"&&x.u==="kg")
+  const kgProp=datos.productos.filter(x=>x.tipo==="propio"&&x.u==="kg"&&x.fam)
     .reduce((a,x)=>a+(vend[x.id]||0),0);
   if(kgProp&&kgPollo){
     const r=kgProp/kgPollo*100;
@@ -1705,8 +1706,14 @@ function preset(t){
     const m=p.getFullYear()+"-"+String(p.getMonth()+1).padStart(2,"0");
     panel.desde=m+"-01"; panel.hasta=m+"-"+new Date(d.getFullYear(),d.getMonth(),0).getDate();
   } else {
-    const o=[...datos.cierres].sort((a,b)=>a.fecha<b.fecha?-1:1);
-    panel.desde=o.length?o[0].fecha:datos.inicio.fecha; panel.hasta=hoy();
+    const todas=[].concat(
+      datos.cierres.map(c=>c.fecha), datos.gastos.map(g=>g.fecha),
+      datos.pedidos.map(x=>x.fecha), (datos.retiros||[]).map(r=>r.fecha),
+      datos.traspasos.map(t=>t.fecha), datos.consumos.map(c=>c.fecha),
+      datos.ventas.map(v=>v.desde), (datos.conteos||[]).map(c=>c.desde),
+      HIST_DESDE?[HIST_DESDE]:[], [datos.inicio.fecha]
+    ).filter(Boolean).sort();
+    panel.desde=todas[0]; panel.hasta=hoy();
   }
   panel.txt=null; render();
 }
@@ -1738,7 +1745,7 @@ function armarResumen(){
     pd[n]=pd[n]||{t:0,n:0}; pd[n].t+=c.efectivo+c.posnet; pd[n].n++; });
   const pc={}; gs.forEach(g=>pc[g.categoria]=(pc[g.categoria]||0)+g.monto);
 
-  const L=["GRANJA LOS ABUELOS — "+fec(d1)+" al "+fec(d2),
+  const L=["GRANJA LOS ABUELOS — "+fecL(d1)+" al "+fecL(d2),
     (hs.length?"Incluye "+hs.length+" días de la planilla anterior (Excel) y "+vivos.length+" días cargados en la app.":"Días cargados en la app: "+vivos.length),
     "","VENTAS",
     "Días cargados: "+cs.length,"Total: "+$$(ef+po)+" (efectivo "+$$(ef)+", posnet "+$$(po)+")"];
@@ -1790,14 +1797,15 @@ function armarResumen(){
       const f=conKg(t); if(!f.length) return;
       L.push("");
       L.push(titulo+" (producto; vendido; comprado; importe comprado; costo unitario)");
-      let tk=0;
+      let tk=0, tkCarne=0;
       f.forEach(pd=>{
         const c=compR[pd.id]||{cant:0,monto:0}, v=vendR[pd.id]||0;
-        if(pd.u==="kg") tk+=v;   /* las unidades no suman kilos */
+        if(pd.u==="kg"){ tk+=v; if(pd.fam) tkCarne+=v; }   /* unidades y verduras no cuentan para el rendimiento */
         L.push(pd.n+"; "+fmt(v)+" "+pd.u+"; "+fmt(c.cant)+" "+pd.u+"; "+$$(c.monto)+"; "+(c.cant?$$(c.monto/c.cant):"-"));
       });
       L.push("Total vendido en kilos: "+fmt(tk)+" kg");
-      return tk;
+      if(t==="propio"&&tk!==tkCarne) L.push("De eso, sale del pollo: "+fmt(tkCarne)+" kg (el resto son productos de verdura)");
+      return t==="propio"?tkCarne:tk;
     };
     const kgProp=bloque("propio","PRODUCTOS PROPIOS (salen del pollo)")||0;
     bloque("congelado","CONGELADOS COMPRADOS");
