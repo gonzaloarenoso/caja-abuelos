@@ -347,6 +347,8 @@ function calcular(d){
   const corte=uB?uB.fecha:d.inicio.fecha;
   let cajaChica=uQ?uQ.quedo:d.inicio.cajaChica, banco=uB?uB.banco:d.inicio.banco, cajaGrande=d.inicio.cajaGrande;
   (d.retiros||[]).forEach(r=>cajaGrande+=r.monto||0);
+  let bancoEst=false;
+  cs.forEach(c=>{ if(c.fecha>corte){ banco+=c.posnet||0; bancoEst=true; } });
   d.gastos.forEach(g=>{ if(g.origen==="efectivo") cajaGrande-=g.monto; else if(g.fecha>corte) banco-=g.monto; });
   d.liquidaciones.forEach(l=>{ if(l.origen==="efectivo") cajaGrande-=l.neto; else if(l.fecha>corte) banco-=l.neto; });
   d.pedidos.forEach(x=>{
@@ -359,7 +361,7 @@ function calcular(d){
   d.traspasos.forEach(t=>{ const n=t.monto-(t.comision||0);
     if(t.sentido==="be"){ cajaGrande+=n; if(t.fecha>corte) banco-=t.monto; }
     else { cajaGrande-=t.monto; if(t.fecha>corte) banco+=n; } });
-  return { cajaChica, cajaGrande, banco, total:cajaGrande+banco };
+  return { cajaChica, cajaGrande, banco, bancoEst, total:cajaGrande+banco };
 }
 function previos(f){
   const a=datos.cierres.filter(c=>c.fecha<f).sort((x,y)=>x.fecha<y.fecha?-1:1);
@@ -597,7 +599,7 @@ function vInicio(){
     '<button class="ojo" onclick="verMontos=!verMontos;render()">'+(verMontos?OJO_ON:OJO_OFF)+'</button></span></div>'+
     '<div class="row">'+
     '<div class="mini"><p>Efectivo</p><p>'+oc(s.cajaGrande)+'</p></div>'+
-    '<div class="mini"><p>Banco</p><p>'+oc(s.banco)+'</p></div></div>'+
+    '<div class="mini"><p>Banco'+(s.bancoEst?' (estimado)':'')+'</p><p>'+oc(s.banco)+'</p></div></div>'+
     (deuda>0 ? '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f5f5f4">'+
       fila("Deuda con proveedores","−"+oc(deuda))+
       fila("Queda libre",oc(s.total-deuda),true)+'</div>' : "")+
@@ -1911,7 +1913,7 @@ function armarResumen(){
   datos.proveedores.forEach(pr=>L.push(pr.nombre+": "+$$(deudaProv(pr))+(pr.saldoIni?" (incluye "+$$(pr.saldoIni)+" de deuda anterior)":"")));
   L.push("Total: "+$$(deudaTotal()));
   L.push("","SALDOS AL DÍA DE HOY","Efectivo: "+$$(s.cajaGrande),
-    "Banco: "+$$(s.banco),"Fondo fijo en el cajón: "+$$(s.cajaChica)+" (no cuenta como disponible)","Total disponible: "+$$(s.total),"Libre después de pagar proveedores: "+$$(s.total-deudaTotal()));
+    "Banco: "+$$(s.banco)+(s.bancoEst?" (estimado: faltan saldos reales desde el último cierre completo)":""),"Fondo fijo en el cajón: "+$$(s.cajaChica)+" (no cuenta como disponible)","Total disponible: "+$$(s.total),"Libre después de pagar proveedores: "+$$(s.total-deudaTotal()));
   panel.txt=L.join("\n");
   render();
 }
