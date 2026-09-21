@@ -341,8 +341,11 @@ function notificar(t){
 /* ---------- saldos ---------- */
 function calcular(d){
   const cs=[...d.cierres].sort((a,b)=>a.fecha<b.fecha?-1:1);
-  const u=cs[cs.length-1], corte=u?u.fecha:d.inicio.fecha;
-  let cajaChica=u?u.quedo:d.inicio.cajaChica, banco=u?u.banco:d.inicio.banco, cajaGrande=d.inicio.cajaGrande;
+  const conB=cs.filter(c=>c.banco!==null&&c.banco!==undefined);
+  const conQ=cs.filter(c=>c.quedo!==null&&c.quedo!==undefined);
+  const uB=conB[conB.length-1], uQ=conQ[conQ.length-1];
+  const corte=uB?uB.fecha:d.inicio.fecha;
+  let cajaChica=uQ?uQ.quedo:d.inicio.cajaChica, banco=uB?uB.banco:d.inicio.banco, cajaGrande=d.inicio.cajaGrande;
   (d.retiros||[]).forEach(r=>cajaGrande+=r.monto||0);
   d.gastos.forEach(g=>{ if(g.origen==="efectivo") cajaGrande-=g.monto; else if(g.fecha>corte) banco-=g.monto; });
   d.liquidaciones.forEach(l=>{ if(l.origen==="efectivo") cajaGrande-=l.neto; else if(l.fecha>corte) banco-=l.neto; });
@@ -360,9 +363,10 @@ function calcular(d){
 }
 function previos(f){
   const a=datos.cierres.filter(c=>c.fecha<f).sort((x,y)=>x.fecha<y.fecha?-1:1);
-  const u=a[a.length-1];
-  return u ? {cajaChica:u.quedo,banco:u.banco,corte:u.fecha}
-           : {cajaChica:datos.inicio.cajaChica,banco:datos.inicio.banco,corte:datos.inicio.fecha};
+  const qs=a.filter(c=>c.quedo!==null&&c.quedo!==undefined), bs=a.filter(c=>c.banco!==null&&c.banco!==undefined);
+  const uq=qs[qs.length-1], ub=bs[bs.length-1];
+  return {cajaChica:uq?uq.quedo:datos.inicio.cajaChica, banco:ub?ub.banco:datos.inicio.banco,
+          corte:ub?ub.fecha:datos.inicio.fecha, sinQuedo:!!(a.length&&a[a.length-1].quedo==null)};
 }
 const saldoEmp = id => datos.consumos.filter(c=>c.empleadoId===id&&!c.liquidado).reduce((s,c)=>s+c.monto,0);
 
@@ -563,8 +567,9 @@ function vInicio(){
   const dm=datos.cierres.filter(c=>ym(c.fecha)===m);
   const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
   const prom=dm.length?ventas/dm.length:0;
-  const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos||0),0);
   const falt=dm.reduce((a,c)=>a+(c.faltante||0),0);
+  const cli=dm.reduce((a,c)=>a+(c.clientes||0),0);
   const delMesG=datos.gastos.filter(g=>ym(g.fecha)===m);
   const delMesL=datos.liquidaciones.filter(l=>ym(l.fecha)===m);
   const delMesA=datos.consumos.filter(c=>c.tipo==="adelanto"&&ym(c.fecha)===m);
@@ -610,6 +615,7 @@ function vInicio(){
      '<h3>'+esc(nombreMes(m))+'</h3><button class="link" onclick="abrir(\'ajustes\')">Historial y ajustes</button></div><div class="resumen">'+
      fila("Ventas · "+dm.length+(dm.length===1?" día":" días"),oc(ventas),true)+
      fila("Promedio diario",oc(prom))+
+     (cli?fila("Ticket promedio · "+fmt(cli)+" clientes",oc(ventas/cli)):"")+
      fila("Gastos en efectivo",oc(efe))+
      fila("Gastos de cuenta bancaria",oc(ban))+
      fila("Salió del cajón",oc(chicos))+
@@ -668,11 +674,13 @@ function vCierre(){
    '<div class="mb"><label><span>Fecha</span><input type="date" id="cf" value="'+f+'" onchange="panel.fecha=this.value;render()"></label></div>'+
    (e?'<p class="muted mb">Este día ya estaba cargado. Si guardás, lo reemplazás.</p>':'')+
    '<p class="muted mb">El cajón venía de '+$$(p.cajaChica)+' y el banco de '+$$(p.banco)+', al '+fec(p.corte)+'.</p>'+
+   '<p class="tiny mb">Si no tenés el conteo del cajón o el saldo del banco de ese día, dejalos vacíos. Se corrigen con el próximo cierre completo.</p>'+
    '<div class="row"><label><span>Cobrado en efectivo</span><input id="ce" inputmode="decimal" value="'+v("efectivo")+'" oninput="recalcCierre()"></label>'+
    '<label><span>Cobrado por Posnet</span><input id="cp" inputmode="decimal" value="'+v("posnet")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="row"><label><span>Retiré del cajón</span><div style="padding:9px 11px;background:#fafaf9;border:1px solid #e7e5e4;border-radius:6px;font-size:16px">'+$$(retirosDe(f))+
    '</div><button class="link" style="margin-top:4px" onclick="irA({tipo:\'retiro\',fecha:\''+f+'\'};render()">Cargar un retiro</button></label>'+
    '<label><span>Quedó en caja</span><input id="cq" inputmode="decimal" value="'+v("quedo")+'" oninput="recalcCierre()"></label></div>'+
+   '<div class="row"><label><span>Clientes (tickets del CRM)</span><input id="ck" inputmode="numeric" placeholder="0" value="'+v("clientes")+'" oninput="recalcCierre()"></label><label></label></div>'+
    '<div class="mb"><label><span>De lo que salió del cajón, gastos conocidos</span><input id="cg" inputmode="decimal" placeholder="0" value="'+v("gastosConocidos")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="mb"><label><span>Saldo real del banco</span><input id="cb" inputmode="decimal" value="'+v("banco")+'" oninput="recalcCierre()"></label></div>'+
    '<div class="resumen" id="resCierre"></div><p id="errCierre"></p></div>'+
@@ -689,10 +697,12 @@ function movBanco(f){
 }
 function datosCierre(){
   const f=panel.fecha, p=previos(f);
-  const e=num(val("ce")), po=num(val("cp")), r=retirosDe(f), q=num(val("cq")), b=num(val("cb"));
-  const chicos=p.cajaChica+e-r-q, esperado=p.banco+po+movBanco(f);
-  const conocidos=num(val("cg")), faltante=chicos-conocidos;
-  return {f,e,po,r,q,b,chicos,conocidos,faltante,dif:b-esperado};
+  const e=num(val("ce")), po=num(val("cp")), r=retirosDe(f);
+  const hayQ=val("cq")!=="", hayB=val("cb")!=="";
+  const q=hayQ?num(val("cq")):null, b=hayB?num(val("cb")):null;
+  const chicos=hayQ?p.cajaChica+e-r-q:null, esperado=p.banco+po+movBanco(f);
+  const conocidos=num(val("cg")), faltante=chicos===null?null:chicos-conocidos, clientes=cant(val("ck"));
+  return {f,e,po,r,q,b,chicos,conocidos,faltante,clientes,dif:b===null?null:b-esperado};
 }
 function recalcCierre(){
   try{ recalcCierre_(); }catch(e){}
@@ -701,17 +711,18 @@ function recalcCierre_(){
   const d=datosCierre();
   document.getElementById("resCierre").innerHTML =
     fila("Venta del día",$$(d.e+d.po),true)+
-    fila("Salió del cajón",$$(d.chicos))+
-    (d.conocidos?fila("Gastos conocidos",$$(d.conocidos)):"")+
-    (d.conocidos?fila(d.faltante>=0?"Faltante":"Sobrante",$$(Math.abs(d.faltante)),true):"")+
-    fila("Sin acreditar o comisiones",$$(d.dif));
+    (d.clientes?fila("Ticket promedio",$$((d.e+d.po)/d.clientes)+" · "+fmt(d.clientes)+" clientes"):"")+
+    (d.chicos===null?fila("Salió del cajón","sin conteo"):fila("Salió del cajón",$$(d.chicos)))+
+    (d.conocidos&&d.chicos!==null?fila("Gastos conocidos",$$(d.conocidos)):"")+
+    (d.conocidos&&d.chicos!==null?fila(d.faltante>=0?"Faltante":"Sobrante",$$(Math.abs(d.faltante)),true):"")+
+    (d.dif===null?fila("Banco","sin saldo cargado"):fila("Sin acreditar o comisiones",$$(d.dif)));
   document.getElementById("errCierre").innerHTML =
-    d.chicos<0 ? '<span class="error">Los gastos chicos dan negativo. Revisá el conteo o el retiro.</span>' : "";
+    (d.chicos!==null&&d.chicos<0) ? '<span class="error">Los gastos chicos dan negativo. Revisá el conteo o el retiro.</span>' : "";
 }
 function guardarCierre(){
-  if(val("ce")===""||val("cq")===""||val("cb")==="") return notificar("Faltan el efectivo cobrado, lo que quedó en caja y el saldo del banco.");
+  if(val("ce")==="") return notificar("Falta el efectivo cobrado.");
   const d=datosCierre();
-  const reg={fecha:d.f,efectivo:d.e,posnet:d.po,retiro:retirosDe(d.f),quedo:d.q,banco:d.b,gastosChicos:d.chicos,gastosConocidos:d.conocidos,faltante:d.conocidos?d.faltante:0,difBanco:d.dif};
+  const reg={fecha:d.f,efectivo:d.e,posnet:d.po,retiro:retirosDe(d.f),quedo:d.q,banco:d.b,gastosChicos:d.chicos,clientes:d.clientes,gastosConocidos:d.conocidos,faltante:d.conocidos?d.faltante:0,difBanco:d.dif};
   const existia=datos.cierres.some(c=>c.fecha===d.f);
   guardar({...datos,cierres:[...datos.cierres.filter(c=>c.fecha!==d.f),reg]});
   listo(existia?"Día actualizado.":"Día guardado.");
@@ -1128,7 +1139,7 @@ function vMovs(){
   const items=[];
 
   datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
-    t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+" · quedó "+$$(c.quedo),
+    t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+(c.quedo==null?" · sin conteo":" · quedó "+$$(c.quedo)),
     monto:c.efectivo+c.posnet, signo:"+",
     acc:'<button class="link" onclick="irA({tipo:\'cierre\',fecha:\''+c.fecha+'\'});">Editar</button>'}));
 
@@ -1412,7 +1423,7 @@ function resultadoMes(ym){
   const oper = gs.filter(g=>!esProv(g)&&g.categoria!==CAT_RETIRO&&g.categoria!==CAT_ESPECIE)
                  .reduce((a,g)=>a+g.monto,0);
   const especie = gs.filter(g=>g.categoria===CAT_ESPECIE).reduce((a,g)=>a+g.monto,0);
-  const chicos = dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const chicos = dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos||0),0);
   const sueldos = datos.liquidaciones.filter(l=>l.fecha.slice(0,7)===ym).reduce((a,l)=>a+l.bruto,0);
 
   const idx = mesesInv(24).indexOf(ym);
@@ -1732,7 +1743,7 @@ function armarResumen(){
   const ms=datos.consumos.filter(c=>en(c.fecha));
   const s=calcular(datos);
   const ef=cs.reduce((a,c)=>a+c.efectivo,0), po=cs.reduce((a,c)=>a+c.posnet,0);
-  const chicos=cs.reduce((a,c)=>a+Math.max(0,c.gastosChicos),0);
+  const chicos=cs.reduce((a,c)=>a+Math.max(0,c.gastosChicos||0),0);
   const provPollo=datos.proveedores.find(pr=>pr.nombre.toLowerCase().indexOf("pollo")>=0);
   const peds=datos.pedidos.filter(x=>en(x.fecha));
   const pollo=peds.filter(x=>provPollo&&x.provId===provPollo.id);
@@ -1750,16 +1761,23 @@ function armarResumen(){
     "","VENTAS",
     "Días cargados: "+cs.length,"Total: "+$$(ef+po)+" (efectivo "+$$(ef)+", posnet "+$$(po)+")"];
   if(cs.length) L.push("Promedio diario: "+$$((ef+po)/cs.length));
+  const cliT=cs.reduce((a,c)=>a+(c.clientes||0),0);
+  const diasCli=cs.filter(c=>c.clientes).length;
+  if(cliT){
+    L.push("Clientes: "+fmt(cliT)+" en "+diasCli+" días | promedio "+fmt(cliT/diasCli)+" por día");
+    const vCli=cs.filter(c=>c.clientes).reduce((a,c)=>a+c.efectivo+c.posnet,0);
+    L.push("Ticket promedio: "+$$(vCli/cliT));
+  }
   L.push("");
   if(Object.keys(pd).length){
     L.push("PROMEDIO POR DÍA DE SEMANA");
     Object.entries(pd).sort((a,b)=>b[1].t/b[1].n-a[1].t/a[1].n).forEach(([k,v])=>L.push(k+": "+$$(v.t/v.n)+" ("+v.n+" días)"));
     L.push("");
   }
-  L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; retiro; quedó; salió del cajón; faltante; saldo banco; sin acreditar)");
+  L.push("DETALLE DIARIO (fecha; efectivo; posnet; venta; clientes; ticket promedio; retiro; quedó; salió del cajón; faltante; saldo banco; sin acreditar)");
   cs.forEach(c=>L.push(c.hist
-    ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","-","planilla anterior"].join("; ")
-    : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.retiro,c.quedo,c.gastosChicos,c.faltante||0,c.banco,c.difBanco].join("; ")));
+    ? [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,"-","-","-","-","-","-","-","-","planilla anterior"].join("; ")
+    : [c.fecha,c.efectivo,c.posnet,c.efectivo+c.posnet,c.clientes||"-",c.clientes?Math.round((c.efectivo+c.posnet)/c.clientes):"-",c.retiro,c.quedo==null?"-":c.quedo,c.gastosChicos==null?"-":c.gastosChicos,c.faltante||0,c.banco==null?"-":c.banco,c.difBanco==null?"-":c.difBanco].join("; ")));
   L.push("","GASTOS CHICOS PAGADOS DEL CAJÓN: "+$$(chicos),"","GASTOS DE CAJA GRANDE Y CUENTA BANCARIA");
   if(!gs.length) L.push("Ninguno.");
   Object.entries(pc).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>L.push(k+": "+$$(v)));
