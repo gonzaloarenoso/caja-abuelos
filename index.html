@@ -423,7 +423,22 @@ function completar(d){
   d.gastos = d.gastos.map(g=> g.categoria==="Retiro del dueño" ? {...g,categoria:CAT_RETIRO} : g);
   return d;
 }
+function cierresCalc(){
+  const cs=[...datos.cierres].sort((a,b)=>a.fecha<b.fecha?-1:1);
+  let prevQ=datos.inicio.cajaChica;
+  return cs.map(c=>{
+    const ret=(datos.retiros||[]).filter(r=>r.fecha===c.fecha).reduce((a,r)=>a+r.monto,0);
+    const chicos=(c.quedo==null)?null:prevQ+c.efectivo-ret-c.quedo;
+    const falt=(chicos==null)?null:chicos-(c.gastosConocidos||0);
+    if(c.quedo!=null) prevQ=c.quedo;
+    return {...c, retiro:ret, gastosChicos:chicos, faltante:falt};
+  });
+}
 const retirosDe = f => (datos.retiros||[]).filter(r=>r.fecha===f).reduce((a,r)=>a+r.monto,0);
+function pagoLiq(l){
+  if(l.pagEfe!==undefined||l.pagBan!==undefined) return {efe:l.pagEfe||0,ban:l.pagBan||0};
+  return l.origen==="banco" ? {efe:0,ban:l.neto} : {efe:l.neto,ban:0};
+}
 function pagoDe(x){
   if(!x.pagado) return {efe:0,ban:0};
   if(x.pagEfe!==undefined||x.pagBan!==undefined) return {efe:x.pagEfe||0,ban:x.pagBan||0};
@@ -566,7 +581,7 @@ function vInicio(){
       ' Sin el conteo no se puede calcular la ganancia.</p>'+
       '<button class="btn2" onclick="abrir(\'inventario\')">Cargar inventario</button></div>'
     : "";
-  const dm=datos.cierres.filter(c=>ym(c.fecha)===m);
+  const dm=cierresCalc().filter(c=>ym(c.fecha)===m);
   const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
   const prom=dm.length?ventas/dm.length:0;
   const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos||0),0);
@@ -580,8 +595,8 @@ function vInicio(){
   const gRet=delMesG.filter(g=>g.categoria===CAT_RETIRO);
   const gEsp=delMesG.filter(g=>g.categoria===CAT_ESPECIE);
   const pedPag=datos.pedidos.filter(x=>x.pagado&&ym(x.fecha)===m);
-  const efe = sum(gOper,"monto","efectivo") + sum(delMesL,"neto","efectivo") + sum(delMesA,"monto","efectivo") + pedPag.reduce((a,x)=>a+pagoDe(x).efe,0);
-  const ban = sum(gOper,"monto","banco") + sum(delMesL,"neto","banco") + sum(delMesA,"monto","banco") + pedPag.reduce((a,x)=>a+pagoDe(x).ban,0);
+  const efe = sum(gOper,"monto","efectivo") + delMesL.reduce((a,l)=>a+pagoLiq(l).efe,0) + sum(delMesA,"monto","efectivo") + pedPag.reduce((a,x)=>a+pagoDe(x).efe,0);
+  const ban = sum(gOper,"monto","banco") + delMesL.reduce((a,l)=>a+pagoLiq(l).ban,0) + sum(delMesA,"monto","banco") + pedPag.reduce((a,x)=>a+pagoDe(x).ban,0);
   const ret = gRet.reduce((a,g)=>a+g.monto,0);
   const esp = gEsp.reduce((a,g)=>a+g.monto,0);
   const deuda = deudaTotal();
@@ -691,7 +706,7 @@ function vCierre(){
 function movBanco(f){
   let m=0;
   datos.gastos.forEach(g=>{ if(g.origen==="banco"&&g.fecha===f) m-=g.monto; });
-  datos.liquidaciones.forEach(l=>{ if(l.origen==="banco"&&l.fecha===f) m-=l.neto; });
+  datos.liquidaciones.forEach(l=>{ if(l.fecha===f) m-=pagoLiq(l).ban; });
   datos.consumos.forEach(c=>{ if(c.tipo==="adelanto"&&c.origen==="banco"&&c.fecha===f) m-=c.monto; });
   datos.pedidos.forEach(x=>{ if(x.pagado&&x.fecha===f) m-=pagoDe(x).ban; });
   datos.traspasos.forEach(t=>{ if(t.fecha!==f) return; m += t.sentido==="be" ? -t.monto : t.monto-(t.comision||0); });
@@ -884,11 +899,15 @@ function darBaja(){
 function vLiquidar(){
   const e=panel.emp;
   const pend=datos.consumos.filter(c=>c.empleadoId===e.id&&!c.liquidado);
+  const brutoIni=e.sueldo+e.viaticos;
+  const deudaIni=pend.reduce((a,c)=>a+c.monto,0);
+  const netoIni=Math.max(0,brutoIni-Math.min(deudaIni,brutoIni));
   return '<div class="card"><p style="font-weight:500;margin-bottom:12px">'+esc(e.nombre)+'</p>'+
    '<div class="mb"><label><span>Sueldo a pagar</span><input id="ls" inputmode="decimal" value="'+(e.sueldo+e.viaticos)+'" oninput="recalcLiquidar()"></label></div>'+
    '<div class="resumen mb"><p class="tiny" style="margin-bottom:6px">Consumos y adelantos pendientes</p>'+
    (pend.length ? pend.map(c=>'<div class="fila"><span>'+esc(etiqueta(c))+'</span><span>'+$$(c.monto)+'</span></div>').join("") : '<p class="muted">Ninguno.</p>')+'</div>'+
-   '<div class="mb"><label><span>Pagar desde</span><select id="lo"><option value="efectivo">Efectivo</option><option value="banco">Banco</option></select></label></div>'+
+   '<div class="row"><label><span>Pago en efectivo</span><input id="lpe" inputmode="decimal" placeholder="0" value="'+netoIni+'" oninput="recalcLiquidar()"></label>'+
+   '<label><span>Pago por banco</span><input id="lpb" inputmode="decimal" placeholder="0" oninput="recalcLiquidar()"></label></div>'+
    '<div class="resumen" id="resLiq"></div></div>'+
    '<button class="btn" onclick="guardarLiquidacion()">Liquidar sueldo</button>';
 }
@@ -898,14 +917,19 @@ function recalcLiquidar(){
 function recalcLiquidar_(){
   const e=panel.emp;
   const deuda=saldoEmp(e.id), bruto=num(val("ls")), ap=Math.min(deuda,bruto);
+  const pe=num(val("lpe")), pb=num(val("lpb")), neto=bruto-ap, falta=neto-pe-pb;
   document.getElementById("resLiq").innerHTML =
-    fila("Costo salarial",$$(bruto))+fila("A descontar","−"+$$(ap))+fila("Sale de caja",$$(bruto-ap),true)+
+    fila("Costo salarial",$$(bruto))+fila("A descontar","−"+$$(ap))+fila("Le pagás",$$(neto),true)+
+    (pe?fila("Sale de efectivo",$$(pe)):"")+(pb?fila("Sale del banco",$$(pb)):"")+
+    (Math.abs(falta)>1?'<p class="tiny" style="margin-top:6px;color:#b91c1c">'+(falta>0?"Falta asignar "+$$(falta):"Asignaste "+$$(-falta)+" de más")+". Los dos pagos tienen que sumar "+$$(neto)+'.</p>':"")+
     (deuda>bruto?'<p class="tiny" style="margin-top:6px">El saldo supera el sueldo. Quedan '+$$(deuda-bruto)+' para la próxima.</p>':"");
 }
 function guardarLiquidacion(){
-  const e=panel.emp, bruto=num(val("ls")), origen=val("lo");
+  const e=panel.emp, bruto=num(val("ls"));
   if(bruto<=0) return notificar("Poné el sueldo.");
   const deuda=saldoEmp(e.id), ap=Math.min(deuda,bruto);
+  const pe=num(val("lpe")), pb=num(val("lpb"));
+  if(Math.abs(bruto-ap-pe-pb)>1) return notificar("El pago en efectivo y por banco tiene que sumar "+$$(bruto-ap)+".");
   const idLiq=uid8();
   let resto=ap;
   const consumos=datos.consumos.map(c=>{
@@ -914,7 +938,7 @@ function guardarLiquidacion(){
     return c;
   });
   guardar({...datos,consumos,liquidaciones:[...datos.liquidaciones,
-    {id:idLiq,fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,origen}]});
+    {id:idLiq,fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,pagEfe:pe,pagBan:pb}]});
   listo(deuda>bruto ? "Liquidado. Quedan "+$$(deuda-bruto)+" pendientes." : "Liquidado. Cuenta en cero.");
 }
 
@@ -1140,7 +1164,7 @@ function vMovs(){
   const nomP = id => { const pr=datos.proveedores.find(x=>x.id===id); return pr?pr.nombre:"proveedor"; };
   const items=[];
 
-  datos.cierres.filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
+  cierresCalc().filter(x=>ym(x.fecha)===m).forEach(c=>items.push({fecha:c.fecha,
     t:"Cierre del día", sub:"venta "+$$(c.efectivo+c.posnet)+(c.quedo==null?" · sin conteo":" · quedó "+$$(c.quedo)),
     monto:c.efectivo+c.posnet, signo:"+",
     acc:'<button class="link" onclick="irA({tipo:\'cierre\',fecha:\''+c.fecha+'\'});">Editar</button>'}));
@@ -1174,7 +1198,7 @@ function vMovs(){
     acc:c.liquidado?"":'<button class="del" onclick="borrarMov(\'consumos\',\''+c.id+'\')">Borrar</button>'}));
 
   datos.liquidaciones.filter(x=>ym(x.fecha)===m).forEach(l=>items.push({fecha:l.fecha,
-    t:"Sueldo de "+l.nombre, sub:"bruto "+$$(l.bruto)+" · descontado "+$$(l.descontado)+" · "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria"),
+    t:"Sueldo de "+l.nombre, sub:"bruto "+$$(l.bruto)+" · descontado "+$$(l.descontado)+" · ef "+$$(pagoLiq(l).efe)+" / bco "+$$(pagoLiq(l).ban),
     monto:l.neto, signo:"−",
     acc:'<button class="del" onclick="anularLiq(\''+l.id+'\')">Anular</button>'}));
 
@@ -1652,7 +1676,7 @@ function vInforme(){
 
 /* ---------- historial y ajustes ---------- */
 function vAjustes(){
-  const ord=[...datos.cierres].sort((a,b)=>a.fecha<b.fecha?1:-1);
+  const ord=[...cierresCalc()].sort((a,b)=>a.fecha<b.fecha?1:-1);
   const meses=[...new Set(ord.map(c=>ym(c.fecha)))];
   const d1=panel.desde||ym(hoy())+"-01", d2=panel.hasta||hoy();
   panel.desde=d1; panel.hasta=d2;
@@ -1733,7 +1757,7 @@ function preset(t){
 function borrarCierre(f){ guardar({...datos,cierres:datos.cierres.filter(c=>c.fecha!==f)}); }
 function armarResumen(){
   const d1=panel.desde,d2=panel.hasta, en=f=>f>=d1&&f<=d2;
-  const vivos=datos.cierres.filter(c=>en(c.fecha));
+  const vivos=cierresCalc().filter(c=>en(c.fecha));
   const fechasVivas=vivos.map(c=>c.fecha);
   const hs=HISTORICO.filter(r=>en(r.f)&&fechasVivas.indexOf(r.f)<0)
     .map(r=>({fecha:r.f,efectivo:r.e,posnet:r.p,consumo:r.c,retiro:null,quedo:null,banco:null,gastosChicos:0,difBanco:0,hist:true,
@@ -1868,7 +1892,7 @@ function armarResumen(){
       let kgv=0;
       datos.ventas.filter(v=>ym(v.hasta)===mm).forEach(v=>v.items.forEach(i=>{
         const pd=datos.productos.find(x=>x.id===i.prodId);
-        if(pd&&pd.tipo==="propio"&&pd.u==="kg") kgv+=i.cant;
+        if(pd&&pd.tipo==="propio"&&pd.u==="kg"&&pd.fam) kgv+=i.cant;
       }));
       const vt=datos.cierres.filter(c=>ym(c.fecha)===mm).reduce((a,c)=>a+c.efectivo+c.posnet,0);
       L.push([nombreMes(mm), fmt(caj), fmt(kgc)+" kg", $$(pl), kgc?$$(pl/kgc):"-",
@@ -1884,6 +1908,7 @@ function armarResumen(){
       const da=new Date(c.desde+"T12:00:00"); da.setDate(da.getDate()-7);
       const ant=datos.conteos.find(x=>x.desde===iso(da));
       if(!ant) return;
+      if(!c.items||!c.items.length){ L.push(fec(c.desde)+" al "+fec(c.hasta)+"; sin conteo cargado"); return; }
       const ini=carneContada(ant.items), ven=carneVendida(c.desde,c.hasta), cont=carneContada(c.items);
       ["pechuga","patamuslo"].forEach(f=>{
         const teo=ini[f]+((c.ingresos&&c.ingresos[f])||0)-ven[f];
@@ -1904,7 +1929,7 @@ function armarResumen(){
   });
   L.push("","LIQUIDACIONES");
   if(!ls.length) L.push("Ninguna.");
-  ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; desde "+(l.origen==="efectivo"?"efectivo":"cuenta bancaria")));
+  ls.forEach(l=>L.push(l.fecha+"; "+l.nombre+"; bruto "+l.bruto+"; descontado "+l.descontado+"; pagado "+l.neto+"; efectivo "+pagoLiq(l).efe+"; banco "+pagoLiq(l).ban));
   const retP=datos.gastos.filter(g=>g.categoria===CAT_RETIRO&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
   const espP=datos.gastos.filter(g=>g.categoria===CAT_ESPECIE&&en(g.fecha)).reduce((a,g)=>a+g.monto,0);
   L.push("","RETIROS DE SOCIOS EN EL PERÍODO: "+$$(retP));
