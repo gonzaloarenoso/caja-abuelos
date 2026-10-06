@@ -255,7 +255,37 @@ const PRODUCTOS_BASE = [
 {id:"pd17",n:"Burger de Garbanzo y Zanahoria",u:"un",activo:true},
 {id:"pd18",n:"Burger de Quínoa y Yamaní",u:"un",activo:true}
 ];
-const EQUILIBRIO = 395000;
+const CAT_FIJAS=["Alquiler","Servicios","Impuestos","Cargas sociales","Verdura","Otros"];
+function mesAnterior(){
+  const d=new Date(hoy()+"T12:00:00"); d.setDate(1); d.setMonth(d.getMonth()-1);
+  return iso(d).slice(0,7);
+}
+function equilibrio(){
+  if(datos.equilibrioManual) return {diario:datos.equilibrioManual, manual:true};
+  const m=mesAnterior();
+  const dm=cierresCalc().filter(c=>ym(c.fecha)===m);
+  if(dm.length<20) return {diario:null, falta:"Hacen falta al menos 20 días cargados de "+nombreMes(m)+" y hay "+dm.length+"."};
+  const ventas=dm.reduce((a,c)=>a+c.efectivo+c.posnet,0);
+  const dias=dm.length;
+
+  const compras=datos.pedidos.filter(x=>ym(x.fecha)===m).reduce((a,x)=>a+x.monto,0);
+  const mc=1-compras/ventas;
+  if(mc<=0.15||mc>=0.85) return {diario:null, falta:"El margen dio "+(mc*100).toFixed(0)+"%. Faltan cargar pedidos o hay ventas sin cargar."};
+
+  const sueldos=datos.empleados.filter(e=>e.activo).reduce((a,e)=>a+e.sueldo+e.viaticos,0);
+  const csCargadas=datos.gastos.filter(g=>g.categoria==="Cargas sociales"&&ym(g.fecha)===m).reduce((a,g)=>a+g.monto,0);
+  const cs=csCargadas>0?csCargadas:sueldos*0.54;
+  const otrosFijos=datos.gastos.filter(g=>ym(g.fecha)===m&&CAT_FIJAS.indexOf(g.categoria)>=0&&g.categoria!=="Cargas sociales")
+    .reduce((a,g)=>a+g.monto,0);
+  const chicos=dm.reduce((a,c)=>a+Math.max(0,c.gastosChicos||0),0);
+  if(chicos/ventas>0.08) return {diario:null,
+    falta:"Los gastos chicos de "+nombreMes(m)+" dan "+$$(chicos)+", el "+(chicos/ventas*100).toFixed(0)+"% de la venta. Son demasiados: casi seguro faltan cargar retiros del cajón."};
+  const fijos=sueldos+cs+otrosFijos+chicos*(30/dias);
+  const mensual=fijos/mc;
+  return {diario:mensual/30, mensual, fijos, mc, sueldos, cs, csEst:csCargadas<=0,
+          otrosFijos, chicos:chicos*(30/dias), ventas, compras, dias, mes:m};
+}
+
 const NUBE = FIREBASE_CONFIG.apiKey.indexOf("PEGAR") !== 0;
 const LKEY = "granja_caja_v1";
 /* Usuarios: a la izquierda lo que escribís, a la derecha el mail real de la cuenta.
@@ -350,7 +380,7 @@ function calcular(d){
   let bancoEst=false;
   cs.forEach(c=>{ if(c.fecha>corte){ banco+=c.posnet||0; bancoEst=true; } });
   d.gastos.forEach(g=>{ if(g.origen==="efectivo") cajaGrande-=g.monto; else if(g.fecha>corte) banco-=g.monto; });
-  d.liquidaciones.forEach(l=>{ if(l.origen==="efectivo") cajaGrande-=l.neto; else if(l.fecha>corte) banco-=l.neto; });
+  d.liquidaciones.forEach(l=>{ const g=pagoLiq(l); cajaGrande-=g.efe; if(l.fecha>corte) banco-=g.ban; });
   d.pedidos.forEach(x=>{
     if(!x.pagado) return;
     const g=pagoDe(x);
@@ -405,6 +435,13 @@ function completar(d){
   });
   if(!d.productos||!d.productos.length) d.productos=JSON.parse(JSON.stringify(PRODUCTOS_BASE));
   d.productos = d.productos.map(x=> x.tipo ? x : {...x,tipo:"congelado"});
+  d.productos = d.productos.map(x=>{
+    if(x.prov!==undefined) return x;
+    const n=x.n.toLowerCase();
+    let prov = x.tipo==="propio" ? "ave" : "congelados";
+    if(/burger de (espinaca|lenteja|remolacha|zapallo|garbanzo|qu[ií]noa)/.test(n)) prov="veggie";
+    return {...x,prov};
+  });
   d.productos = d.productos.map(x=>{
     if(x.fam!==undefined) return x;
     const n=x.n.toLowerCase();
@@ -542,11 +579,12 @@ function render(){
     empleado:panel.emp?panel.emp.nombre:"Empleado",liquidar:"Liquidar sueldo",nuevoEmp:"Nuevo empleado",ajustes:"Historial y ajustes"};
   let cuerpo;
   try { cuerpo = ({cierre:vCierre,gasto:vGasto,traspaso:vTraspaso,empMov:vEmpMov,empleado:vEmpleado,
-    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,historialCarne:vHistorialCarne,hub:vHub,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
+    liquidar:vLiquidar,nuevoEmp:vNuevoEmp,movs:vMovs,retiro:vRetiro,pedido:vPedido,semana:vSemana,productos:vProductos,inventario:vInventario,resultado:vResultado,familias:vFamilias,control:vControl,historialCarne:vHistorialCarne,hub:vHub,reposicion:vReposicion,informe:vInforme,ajustes:vAjustes})[panel.tipo]();
   } catch(err){ mostrarError("al abrir "+panel.tipo+": "+err.message); cuerpo='<div class="card"><p class="muted">No se pudo abrir esta pantalla.</p></div>'; }
   app.innerHTML='<button class="volver" onclick="volver()">&#8592; Volver</button><h2 style="margin-bottom:12px">'+esc(titulos[panel.tipo])+'</h2>'+av+cuerpo;
   if(panel.tipo==="gasto"&&panel.edit){}
   pintarConexion();
+  if(panel.tipo==="reposicion") recalcRepo();
   if(panel.tipo==="cierre") recalcCierre();
   if(panel.tipo==="pedido") recalcPedido();
   if(panel.tipo==="traspaso") recalcTraspaso();
@@ -639,9 +677,14 @@ function vInicio(){
      (falt?fila("Faltantes del mes",oc(falt)):"")+
      (ret?fila("Retiros de socios",oc(ret)):"")+
      (esp?fila("Retiros en especie",oc(esp)):"")+'</div>';
-  if(dm.length && verMontos) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=EQUILIBRIO?"#15803d":"#b91c1c")+'">'+
-     (prom>=EQUILIBRIO ? $$(prom-EQUILIBRIO)+" por día por encima del equilibrio."
-                       : "Faltan "+$$(EQUILIBRIO-prom)+" por día para el equilibrio.")+'</p>';
+  const eq=equilibrio();
+  if(dm.length && verMontos){
+    if(eq.diario) h+='<p style="margin-top:12px;font-size:14px;color:'+(prom>=eq.diario?"#15803d":"#b91c1c")+'">'+
+      (prom>=eq.diario ? $$(prom-eq.diario)+" por día por encima del equilibrio."
+                       : "Faltan "+$$(eq.diario-prom)+" por día para el equilibrio.")+
+      '<br><span class="tiny">Equilibrio: '+$$(eq.diario)+' por día'+(eq.manual?" (puesto a mano)":", calculado con "+nombreMes(eq.mes))+'</span></p>';
+    else h+='<p class="tiny" style="margin-top:12px">Equilibrio no calculable: '+esc(eq.falta)+'</p>';
+  }
   h+='</div>';
 
   const provs=datos.proveedores;
@@ -899,15 +942,15 @@ function darBaja(){
 function vLiquidar(){
   const e=panel.emp;
   const pend=datos.consumos.filter(c=>c.empleadoId===e.id&&!c.liquidado);
-  const brutoIni=e.sueldo+e.viaticos;
+  const brutoIni = panel.ls!==undefined ? panel.ls : (e.sueldo+e.viaticos);
   const deudaIni=pend.reduce((a,c)=>a+c.monto,0);
   const netoIni=Math.max(0,brutoIni-Math.min(deudaIni,brutoIni));
   return '<div class="card"><p style="font-weight:500;margin-bottom:12px">'+esc(e.nombre)+'</p>'+
-   '<div class="mb"><label><span>Sueldo a pagar</span><input id="ls" inputmode="decimal" value="'+(e.sueldo+e.viaticos)+'" oninput="recalcLiquidar()"></label></div>'+
+   '<div class="mb"><label><span>Sueldo a pagar</span><input id="ls" inputmode="decimal" value="'+brutoIni+'" oninput="panel.ls=this.value;recalcLiquidar()"></label></div>'+
    '<div class="resumen mb"><p class="tiny" style="margin-bottom:6px">Consumos y adelantos pendientes</p>'+
    (pend.length ? pend.map(c=>'<div class="fila"><span>'+esc(etiqueta(c))+'</span><span>'+$$(c.monto)+'</span></div>').join("") : '<p class="muted">Ninguno.</p>')+'</div>'+
-   '<div class="row"><label><span>Pago en efectivo</span><input id="lpe" inputmode="decimal" placeholder="0" value="'+netoIni+'" oninput="recalcLiquidar()"></label>'+
-   '<label><span>Pago por banco</span><input id="lpb" inputmode="decimal" placeholder="0" oninput="recalcLiquidar()"></label></div>'+
+   '<div class="row"><label><span>Pago en efectivo</span><input id="lpe" inputmode="decimal" placeholder="0" value="'+(panel.lpe!==undefined?panel.lpe:netoIni)+'" oninput="panel.lpe=this.value;recalcLiquidar()"></label>'+
+   '<label><span>Pago por banco</span><input id="lpb" inputmode="decimal" placeholder="0" value="'+(panel.lpb!==undefined?panel.lpb:"")+'" oninput="panel.lpb=this.value;recalcLiquidar()"></label></div>'+
    '<div class="resumen" id="resLiq"></div></div>'+
    '<button class="btn" onclick="guardarLiquidacion()">Liquidar sueldo</button>';
 }
@@ -917,19 +960,23 @@ function recalcLiquidar(){
 function recalcLiquidar_(){
   const e=panel.emp;
   const deuda=saldoEmp(e.id), bruto=num(val("ls")), ap=Math.min(deuda,bruto);
-  const pe=num(val("lpe")), pb=num(val("lpb")), neto=bruto-ap, falta=neto-pe-pb;
+  const pe=num(val("lpe")), pb=num(val("lpb"));
+  const brutoReal=pe+pb+ap;
+  const difiere=Math.abs(brutoReal-bruto)>1;
   document.getElementById("resLiq").innerHTML =
-    fila("Costo salarial",$$(bruto))+fila("A descontar","−"+$$(ap))+fila("Le pagás",$$(neto),true)+
-    (pe?fila("Sale de efectivo",$$(pe)):"")+(pb?fila("Sale del banco",$$(pb)):"")+
-    (Math.abs(falta)>1?'<p class="tiny" style="margin-top:6px;color:#b91c1c">'+(falta>0?"Falta asignar "+$$(falta):"Asignaste "+$$(-falta)+" de más")+". Los dos pagos tienen que sumar "+$$(neto)+'.</p>':"")+
-    (deuda>bruto?'<p class="tiny" style="margin-top:6px">El saldo supera el sueldo. Quedan '+$$(deuda-bruto)+' para la próxima.</p>':"");
+    fila("Le descontás",$$(ap))+
+    (pe?fila("Le pagás en efectivo",$$(pe)):"")+
+    (pb?fila("Le pagás por banco",$$(pb)):"")+
+    fila("Costo salarial que se registra",$$(brutoReal),true)+
+    (difiere?'<p class="tiny" style="margin-top:6px">Arriba pusiste '+$$(bruto)+'. Se va a guardar '+$$(brutoReal)+', que es lo que realmente pagás más lo que le descontás.</p>':"")+
+    (deuda>bruto?'<p class="tiny" style="margin-top:6px">Quedan '+$$(deuda-brutoReal>0?deuda-brutoReal:0)+' pendientes para la próxima.</p>':"");
 }
 function guardarLiquidacion(){
-  const e=panel.emp, bruto=num(val("ls"));
-  if(bruto<=0) return notificar("Poné el sueldo.");
-  const deuda=saldoEmp(e.id), ap=Math.min(deuda,bruto);
+  const e=panel.emp, puesto=num(val("ls"));
   const pe=num(val("lpe")), pb=num(val("lpb"));
-  if(Math.abs(bruto-ap-pe-pb)>1) return notificar("El pago en efectivo y por banco tiene que sumar "+$$(bruto-ap)+".");
+  if(pe+pb<=0) return notificar("Poné cuánto le pagaste en efectivo o por banco.");
+  const deuda=saldoEmp(e.id), ap=Math.min(deuda,puesto>0?puesto:pe+pb+deuda);
+  const bruto=pe+pb+ap;
   const idLiq=uid8();
   let resto=ap;
   const consumos=datos.consumos.map(c=>{
@@ -938,9 +985,11 @@ function guardarLiquidacion(){
     return c;
   });
   guardar({...datos,consumos,liquidaciones:[...datos.liquidaciones,
-    {id:idLiq,fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:bruto-ap,pagEfe:pe,pagBan:pb}]});
-  listo(deuda>bruto ? "Liquidado. Quedan "+$$(deuda-bruto)+" pendientes." : "Liquidado. Cuenta en cero.");
+    {id:idLiq,fecha:hoy(),empleadoId:e.id,nombre:e.nombre,bruto,descontado:ap,neto:pe+pb,pagEfe:pe,pagBan:pb}]});
+  panel.ls=panel.lpe=panel.lpb=undefined;
+  listo(deuda>ap ? "Liquidado. Quedan "+$$(deuda-ap)+" pendientes." : "Liquidado. Cuenta en cero.");
 }
+
 
 /* ---------- nuevo empleado ---------- */
 function vNuevoEmp(){
@@ -1091,6 +1140,11 @@ function guardarSaldosIni(){
   const provs=datos.proveedores.map(pr=>({...pr,saldoIni:num(val("si_"+pr.id))}));
   guardar({...datos,proveedores:provs});
   notificar("Deuda inicial guardada.");
+}
+function guardarEquilibrio(){
+  const v=num(val("eqm"));
+  guardar({...datos, equilibrioManual: v>0 ? v : null});
+  notificar(v>0 ? "Equilibrio fijado en "+$$(v)+" por día." : "Vuelve a calcularse solo.");
 }
 function guardarKg(){
   const k=cant(val("kgc"));
@@ -1378,6 +1432,90 @@ function vHistorialCarne(){
 }
 function borrarConteo(d){ guardar({...datos,conteos:datos.conteos.filter(c=>c.desde!==d)}); notificar("Conteo borrado."); }
 
+/* ---------- reposición ---------- */
+const PROV={
+  ave:{n:"Ave (pollo, huevo, pan rallado)", dias:[1,2,3,4,5,6], cuando:"de lunes a sábado"},
+  congelados:{n:"Congelados", dias:[2,4], cuando:"martes y jueves a las 9"},
+  veggie:{n:"Burgers veggie", dias:[5], cuando:"viernes a la tarde"}
+};
+function proximas(diasSem, desde){
+  const out=[]; const d=new Date(desde+"T12:00:00");
+  for(let i=1;i<=21&&out.length<2;i++){
+    d.setDate(d.getDate()+1);
+    if(diasSem.indexOf(d.getDay())>=0) out.push({fecha:iso(d), dias:i});
+  }
+  return out;
+}
+function consumoDiario(){
+  const sem=[...datos.ventas].sort((a,b)=>a.desde<b.desde?1:-1).slice(0,4);
+  const out={}; 
+  sem.forEach(v=>v.items.forEach(i=>{ out[i.prodId]=(out[i.prodId]||0)+i.cant; }));
+  const dias=sem.length*7;
+  Object.keys(out).forEach(k=>out[k]=dias?out[k]/dias:0);
+  return {out, semanas:sem.length};
+}
+function vReposicion(){
+  const {out:cons, semanas} = consumoDiario();
+  const colchon = panel.colchon===undefined ? 1 : panel.colchon;
+  panel.colchon = colchon;
+  let h='<div class="card"><p class="tiny">Poné lo que hay en el local y la app calcula cuánto pedir. '+
+    'El consumo sale de las últimas '+semanas+(semanas===1?' semana':' semanas')+' cargadas.</p>'+
+    '<div class="row" style="margin-bottom:0"><label><span>Días de colchón</span>'+
+    '<select onchange="panel.colchon=+this.value;render()">'+
+    [0,1,2,3].map(x=>'<option value="'+x+'"'+(x===colchon?' selected':'')+'>'+x+'</option>').join("")+
+    '</select></label><label></label></div></div>';
+
+  if(!semanas) return h+'<div class="card"><p class="muted">Falta cargar al menos una semana de ventas por producto.</p></div>';
+
+  Object.keys(PROV).forEach(k=>{
+    const pv=PROV[k];
+    const prods=datos.productos.filter(x=>x.activo&&x.prov===k&&(k!=="ave"||x.u==="kg"));
+    if(!prods.length) return;
+    const ent=proximas(pv.dias,hoy());
+    const hastaD=(ent[1]?ent[1].dias:ent[0].dias)+colchon;
+    h+='<div class="card"><h3 style="margin-bottom:4px">'+pv.n+'</h3>'+
+      '<p class="tiny" style="margin-bottom:10px">Viene '+pv.cuando+'. Próxima entrega: '+fec(ent[0].fecha)+
+      ' (en '+ent[0].dias+(ent[0].dias===1?' día':' días')+'). Lo que pidas tiene que durar '+hastaD+' días.</p>'+
+      '<div class="detfila3"><span class="tiny">producto</span><span class="tiny">hay</span><span class="tiny">pedir</span></div>';
+    prods.forEach(pd=>{
+      const c=cons[pd.id]||0;
+      h+='<div class="detfila3"><span>'+esc(pd.n)+'<br><span class="tiny">'+fmt(Math.round(c*100)/100)+' '+pd.u+' por día</span></span>'+
+         '<input id="rp_'+pd.id+'" inputmode="decimal" placeholder="0" oninput="recalcRepo()">'+
+         '<span class="tiny" id="rr_'+pd.id+'" data-c="'+c+'" data-d="'+hastaD+'" data-u="'+pd.u+'" data-urg="'+(ent[0].dias)+'">—</span></div>';
+    });
+    h+='</div>';
+  });
+
+  // pollo en cajones
+  const kgProp=datos.productos.filter(x=>x.activo&&x.tipo==="propio"&&x.u==="kg"&&x.fam);
+  const kgDia=kgProp.reduce((a,x)=>a+(cons[x.id]||0),0);
+  const rend=0.785;
+  const entA=proximas(PROV.ave.dias,hoy());
+  const cobA=(entA[1]?entA[1].dias:entA[0].dias)+colchon;
+  h+='<div class="card"><h3 style="margin-bottom:4px">Cajones de pollo</h3>'+
+     '<div class="resumen">'+
+     fila("Se venden por día",fmt(Math.round(kgDia*10)/10)+" kg de producto")+
+     fila("Equivale a",fmt(Math.round(kgDia/rend*10)/10)+" kg de cajón")+
+     fila("Para "+cobA+" días hacen falta",fmt(Math.ceil(kgDia/rend*cobA/datos.kgCajon))+" cajones",true)+
+     '</div><p class="tiny" style="margin-top:8px">Calculado con un rendimiento de '+(rend*100).toFixed(0)+'% y '+fmt(datos.kgCajon)+' kg por cajón. Restale los cajones que ya tengas.</p></div>';
+  return h;
+}
+function recalcRepo(){
+  datos.productos.filter(x=>x.activo).forEach(pd=>{
+    const inp=document.getElementById("rp_"+pd.id), out=document.getElementById("rr_"+pd.id);
+    if(!inp||!out) return;
+    const c=parseFloat(out.getAttribute("data-c"))||0;
+    const d=parseFloat(out.getAttribute("data-d"))||0;
+    const urg=parseFloat(out.getAttribute("data-urg"))||0;
+    const u=out.getAttribute("data-u");
+    const hay=cant(inp.value);
+    const falta=Math.max(0, c*d-hay);
+    const alcanza = c>0 ? hay/c : 99;
+    out.innerHTML = (falta>0? fmt(Math.ceil(falta*100)/100)+" "+u : "no hace falta") +
+      (c>0 && alcanza<urg ? '<br><span style="color:#b91c1c">alcanza '+fmt(Math.round(alcanza*10)/10)+' días: urgente</span>' : "");
+  });
+}
+
 /* ---------- inventario mensual ---------- */
 function finDeMes(ym){
   const y=+ym.slice(0,4), m=+ym.slice(5,7);
@@ -1500,7 +1638,8 @@ function vHub(){
   let h=grupo("Cargar",[
     ["Venta de la semana","Kilos o unidades vendidas de cada producto","semana"],
     ["Conteo de carne","Control de faltantes por familia","control"],
-    ["Inventario del mes","Foto del stock para calcular la ganancia","inventario"]
+    ["Inventario del mes","Foto del stock para calcular la ganancia","inventario"],
+    ["Qué pedir","Cuánto comprar de cada proveedor","reposicion"]
   ]);
   h+=grupo("Ver",[
     ["Resultado del mes","Ganancia, margen y mercadería consumida","resultado"],
@@ -1718,6 +1857,26 @@ function vAjustes(){
     datos.proveedores.map(pr=>'<div class="detfila2"><span>'+esc(pr.nombre)+'</span>'+
       '<input id="si_'+pr.id+'" inputmode="decimal" placeholder="0" value="'+(pr.saldoIni||"")+'"><span></span></div>').join("")+
     '<button class="btn2" style="margin-top:8px" onclick="guardarSaldosIni()">Guardar</button></div>';
+
+  (function(){
+    const e=equilibrio();
+    h+='<div class="card"><h3 style="margin-bottom:8px">Punto de equilibrio</h3>';
+    if(e.manual) h+='<p class="muted" style="margin-bottom:10px">Puesto a mano: '+$$(e.diario)+' por día.</p>';
+    else if(!e.diario) h+='<p class="muted" style="margin-bottom:10px">'+esc(e.falta)+'</p>';
+    else h+='<div class="resumen" style="margin-bottom:10px">'+
+      fila("Sueldos",$$(e.sueldos))+
+      fila("Cargas sociales"+(e.csEst?" (estimadas 54%)":""),$$(e.cs))+
+      fila("Alquiler, servicios y otros",$$(e.otrosFijos))+
+      fila("Gastos chicos del cajón",$$(e.chicos))+
+      fila("Costos fijos del mes",$$(e.fijos),true)+
+      fila("Margen de contribución",(e.mc*100).toFixed(1)+"%")+
+      fila("Equilibrio mensual",$$(e.mensual))+
+      fila("Equilibrio diario",$$(e.diario),true)+
+      '</div><p class="tiny" style="margin-bottom:10px">Calculado con los datos de '+nombreMes(e.mes)+'. Se actualiza solo cada mes.</p>';
+    h+='<div class="row" style="align-items:end"><label><span>Fijarlo a mano (opcional)</span><input id="eqm" inputmode="decimal" placeholder="0" value="'+(datos.equilibrioManual||"")+'"></label>'+
+       '<button class="btn2" onclick="guardarEquilibrio()">Guardar</button></div>'+
+       '<p class="tiny" style="margin-top:6px">Dejalo vacío para que lo calcule solo.</p></div>';
+  })();
 
   h+='<div class="card"><h3 style="margin-bottom:8px">Kilos por cajón de pollo</h3>'+
     '<p class="muted" style="margin-bottom:12px">Se usa para estimar los kilos y el costo por kilo. Hoy: '+fmt(datos.kgCajon)+' kg.</p>'+
