@@ -272,7 +272,15 @@ function equilibrio(){
   const mc=1-compras/ventas;
   if(mc<=0.15||mc>=0.85) return {diario:null, falta:"El margen dio "+(mc*100).toFixed(0)+"%. Faltan cargar pedidos o hay ventas sin cargar."};
 
-  const sueldos=datos.empleados.filter(e=>e.activo).reduce((a,e)=>a+e.sueldo+e.viaticos,0);
+  const ini=m+"-01", fin=finDeMes(m);
+  const diasMes=+fin.slice(8,10);
+  const sueldos=datos.empleados.reduce((a,e)=>{
+    const d=(e.desde&&e.desde>ini)?e.desde:ini;
+    const hA=(e.hasta&&e.hasta<fin)?e.hasta:(e.activo?fin:(e.hasta||fin));
+    if(d>fin||hA<ini) return a;
+    const trab=(new Date(hA+"T12:00:00")-new Date(d+"T12:00:00"))/86400000+1;
+    return a+(e.sueldo+e.viaticos)*Math.min(1,Math.max(0,trab/diasMes));
+  },0);
   const csCargadas=datos.gastos.filter(g=>g.categoria==="Cargas sociales"&&ym(g.fecha)===m).reduce((a,g)=>a+g.monto,0);
   const cs=csCargadas>0?csCargadas:sueldos*0.54;
   const otrosFijos=datos.gastos.filter(g=>ym(g.fecha)===m&&CAT_FIJAS.indexOf(g.categoria)>=0&&g.categoria!=="Cargas sociales")
@@ -915,6 +923,13 @@ function vEmpleado(){
   let h='<div class="card"><p style="font-size:17px;font-weight:500">'+esc(e.nombre)+'</p>'+
     '<p class="muted" style="margin-bottom:12px">Sueldo '+$$(e.sueldo)+(e.viaticos?" + "+$$(e.viaticos)+" de viáticos":"")+'</p>'+
     '<div class="resumen">'+fila("Sueldo total",$$(e.sueldo+e.viaticos))+fila("Pendiente a descontar",$$(pend),true)+'</div></div>';
+  h+='<div class="card"><h3 style="margin-bottom:8px">Datos</h3>'+
+    '<div class="row"><label><span>Sueldo</span><input id="es" inputmode="decimal" value="'+e.sueldo+'"></label>'+
+    '<label><span>Viáticos</span><input id="ev" inputmode="decimal" value="'+e.viaticos+'"></label></div>'+
+    '<div class="row"><label><span>Desde cuándo trabaja</span><input type="date" id="ed" value="'+(e.desde||"")+'"></label>'+
+    '<label><span>Hasta (si ya no trabaja)</span><input type="date" id="eh" value="'+(e.hasta||"")+'"></label></div>'+
+    '<button class="btn2" onclick="guardarFichaEmp()">Guardar datos</button>'+
+    '<p class="tiny" style="margin-top:8px">Las fechas hacen que el equilibrio cuente el sueldo en proporción a los días trabajados del mes.</p></div>';
   h+='<div class="card"><h3 style="margin-bottom:8px">Consumos y adelantos</h3>';
   h+= movs.length ? movs.map(c=>'<div class="item"><div class="txt"><p>'+esc(etiqueta(c))+'</p><p class="tiny">'+
       (c.liquidado?"ya descontado":"pendiente")+'</p></div><div class="der"><span style="'+(c.liquidado?"color:#a8a29e":"")+'">'+$$(c.monto)+'</span>'+
@@ -929,6 +944,14 @@ function vEmpleado(){
   h+='<button class="btn" onclick="irA({tipo:\'liquidar\',emp:panel.emp})">Liquidar sueldo</button>';
   h+='<p style="margin-top:12px;text-align:center"><button class="del" onclick="darBaja()">Dar de baja</button></p>';
   return h;
+}
+function guardarFichaEmp(){
+  const e=panel.emp;
+  const nuevo={...e, sueldo:num(val("es")), viaticos:num(val("ev")),
+               desde:val("ed")||null, hasta:val("eh")||null};
+  guardar({...datos, empleados:datos.empleados.map(x=>x.id===e.id?nuevo:x)});
+  panel.emp=nuevo;
+  notificar("Datos guardados.");
 }
 function borrarConsumo(id){ guardar({...datos,consumos:datos.consumos.filter(c=>c.id!==id)}); }
 function darBaja(){
@@ -995,13 +1018,15 @@ function guardarLiquidacion(){
 function vNuevoEmp(){
   return '<div class="card"><div class="mb"><label><span>Nombre</span><input id="nn"></label></div>'+
    '<div class="row"><label><span>Sueldo</span><input id="ns" inputmode="decimal" placeholder="0"></label>'+
-   '<label><span>Viáticos</span><input id="nv" inputmode="decimal" placeholder="0"></label></div></div>'+
+   '<label><span>Viáticos</span><input id="nv" inputmode="decimal" placeholder="0"></label></div>'+
+   '<div class="mb"><label><span>Desde cuándo trabaja</span><input type="date" id="nd" value="'+hoy()+'"></label></div>'+
+   '<p class="tiny">La fecha sirve para que el punto de equilibrio cuente su sueldo en proporción al primer mes.</p></div>'+
    '<button class="btn" onclick="guardarEmpleado()">Agregar empleado</button>';
 }
 function guardarEmpleado(){
   const n=val("nn").trim();
   if(!n) return notificar("Poné el nombre.");
-  guardar({...datos,empleados:[...datos.empleados,{id:uid8(),nombre:n,sueldo:num(val("ns")),viaticos:num(val("nv")),activo:true}]});
+  guardar({...datos,empleados:[...datos.empleados,{id:uid8(),nombre:n,sueldo:num(val("ns")),viaticos:num(val("nv")),desde:val("nd")||null,activo:true}]});
   listo("Empleado agregado.");
 }
 
